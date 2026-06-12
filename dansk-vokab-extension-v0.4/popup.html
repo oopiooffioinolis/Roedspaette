@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  body { width: 320px; background: #fff; color: #1c1c1c; font-size: 13px; }
+  header { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid #eeece8; }
+  .flag { width: 18px; height: 13px; background: #C8102E; position: relative; border-radius: 2px; }
+  .flag::before, .flag::after { content: ""; position: absolute; background: #fff; }
+  .flag::before { left: 6px; top: 0; width: 2px; height: 100%; }
+  .flag::after { top: 5.5px; left: 0; height: 2px; width: 100%; }
+  h1 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #6b665e; font-weight: 600; flex: 1; }
+  .dot { width: 8px; height: 8px; border-radius: 99px; background: #d8d4cd; }
+  .dot.ok { background: #1d7a3a; } .dot.bad { background: #C8102E; }
+  main { padding: 12px 14px 14px; display: grid; gap: 10px; }
+  label { font-size: 11px; color: #8a857d; display: block; margin-bottom: 3px; }
+  select, input[type="text"] { width: 100%; font-size: 13px; border: 1px solid #d8d4cd; border-radius: 6px; padding: 6px 8px; background: #fff; color: #1c1c1c; }
+  select:focus, input:focus, button:focus { outline: 2px solid #C8102E; outline-offset: 1px; }
+  .row { display: flex; gap: 6px; }
+  .row > * { flex: 1; }
+  button { font-size: 12.5px; border-radius: 6px; padding: 6px 10px; cursor: pointer; border: 1px solid #d8d4cd; background: #fff; color: #1c1c1c; white-space: nowrap; }
+  button.primary { background: #C8102E; border-color: #C8102E; color: #fff; font-weight: 600; }
+  button.slim { flex: 0; }
+  .muted { font-size: 11.5px; color: #8a857d; line-height: 1.45; }
+  .queue { display: none; background: #fdf3f4; border: 1px solid #f0c8cd; border-radius: 6px; padding: 8px 10px; font-size: 12px; color: #8c1024; }
+  .queue button { margin-left: 8px; }
+  #msg { font-size: 12px; min-height: 14px; color: #6b665e; }
+  #msg.bad { color: #C8102E; } #msg.ok { color: #1d7a3a; }
+  footer { display: flex; justify-content: space-between; padding: 10px 14px; border-top: 1px solid #eeece8; }
+  a { color: #C8102E; text-decoration: none; font-size: 12px; }
+  a:hover { text-decoration: underline; }
+  .setup { display: none; padding: 4px 0; }
+</style>
+</head>
+<body>
+<header>
+  <div class="flag" aria-hidden="true"></div>
+  <h1>Dansk Vokab</h1>
+  <div class="dot" id="dot" title="Connection"></div>
+</header>
+<main>
+  <div class="setup" id="setup">
+    <p class="muted">Not connected yet. Add your GitHub token and repository in <a href="#" id="openOptions1">Options</a> to start collecting.</p>
+  </div>
+  <div id="ready" style="display:none; display:grid; gap:10px;">
+    <div>
+      <label for="set">Active set — new captures go here</label>
+      <div class="row">
+        <select id="set"></select>
+        <button class="slim" id="refresh" title="Reload set list from GitHub">↻</button>
+      </div>
+    </div>
+    <div>
+      <label for="newName">New set</label>
+      <div class="row">
+        <input type="text" id="newName" placeholder="e.g. Nyheder, Arbejde, Hverdag">
+        <button class="slim primary" id="create">Create</button>
+      </div>
+    </div>
+    <div class="queue" id="queue"><span id="queueText"></span><button id="retry">Retry</button></div>
+    <div class="row">
+      <button id="hl" title="Highlight every word you've saved (all sets) on the current page">Highlight known words on page</button>
+      <button id="pending" title="File phone captures from the inbox, then enrich any rows still marked pending">Process inbox &amp; pending</button>
+    </div>
+    <div id="msg"></div>
+    <p class="muted" id="last"></p>
+    <p class="muted">Highlight Danish text → right-click → <b>Save to Danish vocab</b> (or Alt+Shift+D).</p>
+  </div>
+</main>
+<footer>
+  <a href="#" id="openOptions2">Options</a>
+  <a href="#" id="openRepo" target="_blank">Open repo ↗</a>
+</footer>
+<script src="popup.js"></script>
+</body>
+</html>
