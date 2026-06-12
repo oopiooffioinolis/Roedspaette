@@ -1,4 +1,4 @@
-/* Dansk Vokab — background service worker (v0.4: iPhone inbox + auto-pilot). */
+/* Dansk Vokab — background service worker (v0.4.1: iPhone inbox + auto-pilot; pending pass covers all sets). */
 importScripts("lib/xlsx.full.min.js", "lib/vocab-sheets.js");
 
 const VS = self.VocabSheets;
@@ -399,11 +399,34 @@ async function processInbox(cfg, activeSet, knownSets) {
   return { found: all.length, filed, skipped, errors, remaining: all.length - batch.length, set: lastSet };
 }
 
+/* Pending pass across every set file. The quiz app saves manual adds into
+   whichever set the user picks, so scanning only the active set would leave
+   rows in other sets pending forever. Active set goes first. */
+async function processPendingAll(cfg, activeSet, knownSets) {
+  const sets = [activeSet].concat(knownSets.filter((n) => n && n !== activeSet)).filter(Boolean);
+  const total = { processed: 0, updated: 0, remaining: 0, needsSetup: false };
+  let firstError = "";
+  for (const name of sets) {
+    try {
+      const r = await processPending(cfg, name);
+      if (r.error) { if (!firstError) firstError = r.error; continue; }
+      total.processed += r.processed;
+      total.updated += r.updated;
+      total.remaining += r.remaining;
+      if (r.needsSetup) total.needsSetup = true;
+    } catch (e) {
+      if (!firstError) firstError = e.message;
+    }
+  }
+  if (firstError && !total.processed && !total.updated) total.error = firstError;
+  return total;
+}
+
 /* Inbox + pending in one pass; used by the popup button and the background auto-pilot. */
 async function processAll(cfg, activeSet, silent) {
   const knownSets = await listSets(cfg).catch(() => [activeSet]);
   const inbox = await processInbox(cfg, activeSet, knownSets).catch((e) => ({ error: e.message, found: 0, filed: 0, skipped: 0 }));
-  const pend = await processPending(cfg, activeSet).catch((e) => ({ error: e.message, processed: 0, updated: 0 }));
+  const pend = await processPendingAll(cfg, activeSet, knownSets).catch((e) => ({ error: e.message, processed: 0, updated: 0 }));
   const didSomething = (inbox.filed || 0) + (pend.updated || 0) > 0;
   if (!silent || didSomething) {
     const bits = [];
