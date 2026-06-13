@@ -45,7 +45,72 @@ async function refresh(remote) {
     const t = new Date(st.lastSaved.at);
     $("last").textContent = `Last saved: “${st.lastSaved.term}” → ${st.lastSaved.set} at ${t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`;
   }
+  loadChoices();
 }
+
+/* ---------- disambiguation (pick a sense) ---------- */
+let choices = [];   // [{set, id, term, translation, candidates:[{lemma,wordClass,gender,definition,hint,inflections}]}]
+let chIdx = 0, chSel = 0;
+
+async function loadChoices() {
+  const r = await send({ type: "DV_LIST_CHOICES" }).catch(() => null);
+  choices = (r && r.choices) || [];
+  const bar = $("choosebar");
+  if (choices.length) {
+    bar.style.display = "flex";
+    $("chooseText").textContent = `${choices.length} word${choices.length > 1 ? "s" : ""} need${choices.length > 1 ? "" : "s"} a sense picked.`;
+  } else {
+    bar.style.display = "none";
+    $("chooser").style.display = "none";
+  }
+}
+
+function renderChooser() {
+  if (chIdx >= choices.length) { $("chooser").style.display = "none"; loadChoices(); return; }
+  const c = choices[chIdx];
+  chSel = 0;
+  $("chooser").style.display = "block";
+  $("chWord").textContent = `${c.term} — ${c.set.replace(/\.xlsx$/i, "")}`;
+  const box = $("chCands");
+  box.innerHTML = "";
+  c.candidates.forEach((cand, i) => {
+    const el = document.createElement("div");
+    el.className = "cand" + (i === 0 ? " sel" : "");
+    el.innerHTML = `<div class="pos">${esc((cand.wordClass || "—") + (cand.gender ? " · " + cand.gender : ""))}</div>
+      <div class="da">${esc(cand.definition || cand.lemma || "")}</div>
+      ${cand.hint ? `<div class="en">≈ ${esc(cand.hint)}</div>` : ""}`;
+    el.addEventListener("click", () => {
+      chSel = i;
+      [...box.children].forEach((x, j) => x.classList.toggle("sel", j === i));
+      // prefill the translation field with this sense's English hint
+      if (choices[chIdx].candidates[i].hint) $("chTr").value = choices[chIdx].candidates[i].hint;
+    });
+    box.appendChild(el);
+  });
+  // default translation: existing one, else first sense's hint
+  $("chTr").value = c.translation || (c.candidates[0] && c.candidates[0].hint) || "";
+  $("chMsg").textContent = `${chIdx + 1} of ${choices.length}`;
+}
+
+function esc(s) { return String(s).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch])); }
+
+$("openChooser").addEventListener("click", () => { chIdx = 0; renderChooser(); });
+$("chSkip").addEventListener("click", () => { chIdx++; renderChooser(); });
+$("chSave").addEventListener("click", async () => {
+  const c = choices[chIdx];
+  const cand = c.candidates[chSel];
+  $("chSave").disabled = true;
+  $("chMsg").textContent = "Saving…";
+  const r = await send({ type: "DV_RESOLVE_CHOICE", set: c.set, id: c.id, candidate: cand, translation: $("chTr").value.trim() })
+    .catch((e) => ({ error: e.message }));
+  $("chSave").disabled = false;
+  if (r && r.error) { $("chMsg").textContent = r.error; return; }
+  // drop this one from the local list and advance
+  choices.splice(chIdx, 1);
+  if (chIdx >= choices.length) { $("chooser").style.display = "none"; }
+  renderChooser();
+  loadChoices();
+});
 
 $("set").addEventListener("change", async (e) => {
   if (!e.target.value) return;

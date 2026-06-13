@@ -31,6 +31,20 @@
   a { color: #C8102E; text-decoration: none; font-size: 12px; }
   a:hover { text-decoration: underline; }
   .setup { display: none; padding: 4px 0; }
+  /* disambiguation */
+  .choosebar { display: none; background: #fff8e6; border: 1px solid #f0dca0; border-radius: 6px; padding: 8px 10px; font-size: 12px; color: #7a5b00; align-items: center; justify-content: space-between; }
+  .choosebar button { margin-left: 8px; }
+  #chooser { display: none; }
+  .ch-word { font-size: 14px; font-weight: 600; margin: 2px 0 2px; }
+  .ch-sub { font-size: 11px; color: #8a857d; margin-bottom: 8px; }
+  .cand { border: 1px solid #e3e0db; border-radius: 8px; padding: 8px 10px; margin-bottom: 7px; cursor: pointer; }
+  .cand:hover { border-color: #C8102E; background: #fdf6f2; }
+  .cand.sel { border-color: #C8102E; background: #fdf3f4; }
+  .cand .pos { font-size: 11px; color: #C8102E; font-weight: 600; }
+  .cand .da { font-size: 12px; color: #4d483f; margin-top: 2px; line-height: 1.4; }
+  .cand .en { font-size: 12px; color: #1c1c1c; margin-top: 3px; font-style: italic; }
+  .ch-actions { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+  .ch-actions input { flex: 1; }
 </style>
 </head>
 <body>
@@ -59,6 +73,20 @@
       </div>
     </div>
     <div class="queue" id="queue"><span id="queueText"></span><button id="retry">Retry</button></div>
+    <div class="choosebar" id="choosebar"><span id="chooseText"></span><button id="openChooser">Pick senses</button></div>
+    <div id="chooser">
+      <div class="ch-word" id="chWord"></div>
+      <div class="ch-sub" id="chSub">Pick the sense that matches how you saw the word.</div>
+      <div id="chCands"></div>
+      <div class="ch-actions">
+        <input type="text" id="chTr" placeholder="translation…">
+      </div>
+      <div class="ch-actions">
+        <button id="chSkip">Skip for now</button>
+        <button class="primary" id="chSave" style="flex:1">Save choice</button>
+      </div>
+      <div id="chMsg" style="font-size:12px;min-height:14px;margin-top:6px;color:#6b665e"></div>
+    </div>
     <div class="row">
       <button id="hl" title="Highlight every word you've saved (all sets) on the current page">Highlight known words on page</button>
       <button id="pending" title="File phone captures from the inbox, then enrich any rows still marked pending">Process inbox &amp; pending</button>

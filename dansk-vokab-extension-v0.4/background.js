@@ -4,7 +4,7 @@ importScripts("lib/xlsx.full.min.js", "lib/vocab-sheets.js");
 const VS = self.VocabSheets;
 const GH = "https://api.github.com";
 const MENU_ID = "dv-capture";
-const ENRICH_TIMEOUT_MS = 9000;
+const ENRICH_TIMEOUT_MS = 25000; // compound probing can add a few lookups
 const PENDING_BATCH = 25;
 const INBOX = "inbox";
 const INBOX_BATCH = 25;
@@ -80,6 +80,9 @@ async function fetchText(url) {
 
 async function ordnetLookup(term) {
   const q = encodeURIComponent(term.toLowerCase());
+  // Live ordnet.dk first: it's confirmed reachable and its pages carry both the
+  // modern-* structure and legacy markers, so the parser handles it fully.
+  // gammel.ordnet.dk is kept only as a fallback in case the main host is down.
   const urls = [
     `https://ordnet.dk/ddo/ordbog?query=${q}`,
     `https://gammel.ordnet.dk/ddo/ordbog?query=${q}`
@@ -97,6 +100,34 @@ async function ordnetLookup(term) {
     } catch (_) { /* try the next host */ }
   }
   return { found: false };
+}
+
+/* DDO rarely lists transparent compounds (patientoplysninger, bilværksted…),
+   but the compound's last element — the head — determines its gender and
+   inflection. Probe a few plausible split points, verify the hit is a real
+   word form of the head's lemma, and synthesize the compound's grammar. */
+async function resolveCompound(term) {
+  for (const cand of VS.compoundSplits(term, 6)) {
+    let dd;
+    try { dd = await ordnetLookup(cand.suffix); } catch (_) { continue; }
+    if (!dd || !dd.found || !dd.lemma) continue;
+    if (!["substantiv", "verbum", "adjektiv"].includes(dd.wordClass || "")) continue;
+    const lemma = VS.compoundLemma(term, cand.prefix, dd.lemma, dd.inflections);
+    if (!lemma) continue; // suffix wasn't an exact form of the head — fuzzy match, reject
+    return {
+      found: true,
+      compound: true,
+      lemma,
+      wordClass: dd.wordClass || "",
+      gender: dd.gender || "",
+      // suffix-style inflections ("-en, -er, -erne") apply to the whole compound
+      inflections: /^-/.test(String(dd.inflections || "").trim()) ? dd.inflections : "",
+      ipa: "",      // the head's pronunciation is not the compound's
+      audioURL: "",
+      definition: `sammensat af ${cand.prefix} + ${dd.lemma}`
+    };
+  }
+  return null;
 }
 
 /* ---------- translation ---------- */
@@ -123,7 +154,22 @@ async function enrichEntryInner(entry, cfg) {
   const info = { needsSetup: false };
   const userTranslation = !!(entry.translation && entry.translation.trim());
   if (entry.type === "word") {
-    const dd = await ordnetLookup(entry.term);
+    let dd = await ordnetLookup(entry.term);
+    if (!dd.found && entry.term.length >= 8) {
+      const comp = await resolveCompound(entry.term);
+      if (comp) dd = comp;
+    }
+    // Ambiguous: DDO returned several distinct senses. Don't guess — translate
+    // each sense's definition for an English hint and hand the choice to the user.
+    if (!dd.found && dd.ambiguous && Array.isArray(dd.candidates) && dd.candidates.length >= 2) {
+      const defs = dd.candidates.map((c) => c.definition || c.lemma || entry.term);
+      const tr = await translateBatch(defs, cfg.targetLang);
+      if (tr.error === "needs-setup") { info.needsSetup = true; }
+      const hints = tr && tr.translations ? tr.translations : [];
+      entry.candidates = dd.candidates.map((c, i) => Object.assign({}, c, { hint: (hints[i] || "").slice(0, 160) }));
+      entry.status = "choose";
+      return info;
+    }
     if (dd.found) {
       entry.lemma = dd.lemma || "";
       entry.wordClass = dd.wordClass || "";
@@ -309,33 +355,47 @@ async function flushQueueInner(cfg) {
 
 /* ---------- process pending rows in the active set ---------- */
 
-async function processPending(cfg, setName) {
+async function processPending(cfg, setName, includePartial) {
   const file = await getFile(cfg, setName);
   if (!file) return { error: `${setName} not found in the repo.` };
   const wb = VS.readWorkbook(file.b64);
   VS.ensureColumns(wb);
-  const pending = VS.listPending(wb);
+  const pending = VS.listPending(wb, { includePartial: !!includePartial });
   if (!pending.length) return { processed: 0, updated: 0, remaining: 0 };
 
   const batch = pending.slice(0, PENDING_BATCH);
   let updated = 0;
+  let choose = 0;
   let needsSetup = false;
   for (const row of batch) {
-    const entry = { type: row.type, term: row.term };
+    // carry the row's existing translation so a hand-edited one survives the retry
+    const entry = { type: row.type, term: row.term, translation: row.translation || "" };
     const info = await enrichEntry(entry, cfg);
     if (info.needsSetup) { needsSetup = true; continue; }
     if (!entry.status || entry.status === "pending") continue;
-    const fields = entry.type === "word"
-      ? { Lemma: entry.lemma, WordClass: entry.wordClass, Gender: entry.gender,
-          Inflections: entry.inflections, IPA: entry.ipa, AudioURL: entry.audioURL,
-          Definition: entry.definition, Translation: entry.translation, Status: entry.status }
-      : { Gloss: entry.gloss, Translation: entry.translation, Status: entry.status };
+    // a retried row must actually improve; identical results shouldn't make commits
+    if (row.status && row.status !== "pending" && entry.status === row.status &&
+        !entry.wordClass && !entry.inflections && !entry.definition && !entry.gloss &&
+        (entry.translation || "") === (row.translation || "")) continue;
+    let fields;
+    if (entry.status === "choose") {
+      // store the candidate senses; leave grammar blank until the user picks
+      fields = { Status: "choose", Candidates: JSON.stringify(entry.candidates || []) };
+      choose++;
+    } else if (entry.type === "word") {
+      fields = { Lemma: entry.lemma, WordClass: entry.wordClass, Gender: entry.gender,
+        Inflections: entry.inflections, IPA: entry.ipa, AudioURL: entry.audioURL,
+        Definition: entry.definition, Translation: entry.translation, Status: entry.status,
+        Candidates: "" };
+    } else {
+      fields = { Gloss: entry.gloss, Translation: entry.translation, Status: entry.status };
+    }
     if (VS.updateRow(wb, row.sheet, row.row, fields)) updated++;
   }
   if (updated) {
     await putFile(cfg, setName, VS.writeWorkbook(wb), `Enrich ${updated} pending entr${updated === 1 ? "y" : "ies"} in ${setName}`, file.sha);
   }
-  return { processed: batch.length, updated, remaining: pending.length - batch.length, needsSetup };
+  return { processed: batch.length, updated, choose, remaining: pending.length - batch.length, needsSetup };
 }
 
 /* ---------- iPhone inbox (inbox/* files created by the iOS Shortcut) ---------- */
@@ -402,16 +462,17 @@ async function processInbox(cfg, activeSet, knownSets) {
 /* Pending pass across every set file. The quiz app saves manual adds into
    whichever set the user picks, so scanning only the active set would leave
    rows in other sets pending forever. Active set goes first. */
-async function processPendingAll(cfg, activeSet, knownSets) {
+async function processPendingAll(cfg, activeSet, knownSets, includePartial) {
   const sets = [activeSet].concat(knownSets.filter((n) => n && n !== activeSet)).filter(Boolean);
-  const total = { processed: 0, updated: 0, remaining: 0, needsSetup: false };
+  const total = { processed: 0, updated: 0, choose: 0, remaining: 0, needsSetup: false };
   let firstError = "";
   for (const name of sets) {
     try {
-      const r = await processPending(cfg, name);
+      const r = await processPending(cfg, name, includePartial);
       if (r.error) { if (!firstError) firstError = r.error; continue; }
       total.processed += r.processed;
       total.updated += r.updated;
+      total.choose += (r.choose || 0);
       total.remaining += r.remaining;
       if (r.needsSetup) total.needsSetup = true;
     } catch (e) {
@@ -422,17 +483,20 @@ async function processPendingAll(cfg, activeSet, knownSets) {
   return total;
 }
 
-/* Inbox + pending in one pass; used by the popup button and the background auto-pilot. */
+/* Inbox + pending in one pass; used by the popup button and the background
+   auto-pilot. The popup pass also retries "partial" rows; the silent 15-min
+   pass only does "pending" so unfindable words don't burn requests forever. */
 async function processAll(cfg, activeSet, silent) {
   const knownSets = await listSets(cfg).catch(() => [activeSet]);
   const inbox = await processInbox(cfg, activeSet, knownSets).catch((e) => ({ error: e.message, found: 0, filed: 0, skipped: 0 }));
-  const pend = await processPendingAll(cfg, activeSet, knownSets).catch((e) => ({ error: e.message, processed: 0, updated: 0 }));
+  const pend = await processPendingAll(cfg, activeSet, knownSets, !silent).catch((e) => ({ error: e.message, processed: 0, updated: 0 }));
   const didSomething = (inbox.filed || 0) + (pend.updated || 0) > 0;
   if (!silent || didSomething) {
     const bits = [];
     if (inbox.filed) bits.push(`${inbox.filed} phone capture${inbox.filed > 1 ? "s" : ""} filed → ${inbox.set}`);
     if (inbox.skipped) bits.push(`${inbox.skipped} skipped`);
     if (pend.updated) bits.push(`${pend.updated} pending entr${pend.updated > 1 ? "ies" : "y"} enriched`);
+    if (pend.choose) bits.push(`${pend.choose} need${pend.choose > 1 ? "" : "s"} a sense picked — open the popup`);
     if (bits.length) notify("Dansk Vokab", bits.join(" · "));
   }
   return { inbox, pending: pend };
@@ -555,6 +619,70 @@ function reportSave(res, term) {
   else notify("Saved", `"${term}" → ${res.set}`);
 }
 
+/* ---------- disambiguation: list rows needing a choice, and resolve one ---------- */
+
+/* Gather every "choose" row across all set files, for the popup to present. */
+async function listAllChoices(cfg, knownSets) {
+  const sets = knownSets && knownSets.length ? knownSets : await listSets(cfg).catch(() => []);
+  const out = [];
+  for (const name of sets) {
+    let file;
+    try { file = await getFile(cfg, name); } catch (_) { continue; }
+    if (!file) continue;
+    const wb = VS.readWorkbook(file.b64);
+    for (const c of VS.listChoices(wb)) {
+      out.push({ set: name, id: String(c.id || ""), term: c.term, translation: c.translation, candidates: c.candidates });
+    }
+  }
+  return out;
+}
+
+/* Apply the user's chosen sense to a "choose" row: look up the chosen lemma for
+   full grammar (inflections, IPA, audio, definition), write the user's translation,
+   clear the Candidates blob, and flip Status to ok (or partial if no translation). */
+async function resolveChoice(cfg, setName, id, choice) {
+  return serialized(async () => {
+    const file = await getFile(cfg, setName);
+    if (!file) return { error: `${setName} not found.` };
+    const wb = VS.readWorkbook(file.b64);
+    VS.ensureColumns(wb);
+    // find the row by id among the choose rows
+    const target = VS.listChoices(wb).find((c) => String(c.id) === String(id));
+    if (!target) return { error: "That entry was already resolved or removed." };
+
+    const cand = choice && choice.candidate ? choice.candidate : {};
+    const translation = (choice && typeof choice.translation === "string") ? choice.translation.trim() : target.translation;
+
+    // Prefer the chosen sense's own fields; fill any gaps (IPA/audio) from a
+    // fresh lookup of its specific lemma so the card is complete.
+    let lemma = cand.lemma || "", wordClass = cand.wordClass || "", gender = cand.gender || "";
+    let inflections = cand.inflections || "", ipa = "", audioURL = "", definition = cand.definition || "";
+    if (lemma) {
+      try {
+        const dd = await ordnetLookup(lemma);
+        if (dd && dd.found) {
+          inflections = inflections || dd.inflections || "";
+          ipa = dd.ipa || "";
+          audioURL = dd.audioURL || "";
+          definition = definition || dd.definition || "";
+          wordClass = wordClass || dd.wordClass || "";
+          gender = gender || dd.gender || "";
+        }
+      } catch (_) { /* keep candidate fields */ }
+    }
+    const status = (wordClass || inflections) && translation ? "ok" : (translation || wordClass ? "partial" : "choose");
+    const ok = VS.updateRow(wb, target.sheet, target.row, {
+      Lemma: lemma, WordClass: wordClass, Gender: gender, Inflections: inflections,
+      IPA: ipa, AudioURL: audioURL, Definition: definition, Translation: translation,
+      Status: status, Candidates: ""
+    });
+    if (!ok) return { error: "Couldn't write the row." };
+    await putFile(cfg, setName, VS.writeWorkbook(wb),
+      `Resolve "${target.term}" → ${lemma || translation} (${wordClass || "?"}) in ${setName}`, file.sha);
+    return { ok: true, term: target.term, status };
+  });
+}
+
 /* ---------- wiring ---------- */
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -648,6 +776,20 @@ async function handleMessage(msg, sender) {
       if (!configured(cfg)) return { error: "not-configured" };
       if (!state.activeSet) return { error: "No active set." };
       return serialized(() => processAll(cfg, state.activeSet, false));
+    }
+    case "DV_LIST_CHOICES": {
+      if (!configured(cfg)) return { error: "not-configured" };
+      try {
+        const choices = await listAllChoices(cfg, state.sets);
+        return { choices };
+      } catch (e) {
+        return { error: e.message };
+      }
+    }
+    case "DV_RESOLVE_CHOICE": {
+      if (!configured(cfg)) return { error: "not-configured" };
+      if (!msg.set || !msg.id) return { error: "Missing set or id." };
+      return resolveChoice(cfg, msg.set, msg.id, { candidate: msg.candidate, translation: msg.translation });
     }
     case "DV_RETRY_QUEUE": {
       if (!configured(cfg)) return { error: "not-configured" };
