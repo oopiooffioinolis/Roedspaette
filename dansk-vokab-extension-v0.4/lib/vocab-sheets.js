@@ -14,22 +14,28 @@
   const WORD_HEADERS = [
     "ID", "DateAdded", "Term", "Lemma", "WordClass", "Gender", "Inflections",
     "IPA", "AudioURL", "Definition", "Translation", "Snippet", "SourceTitle",
-    "SourceURL", "DeepLink", "Note", "Status", "Candidates", "Due", "Interval", "Ease", "Reps", "Lapses"
+    "SourceURL", "DeepLink", "Note", "Status", "Candidates", "Due", "Interval", "Ease", "Reps", "Lapses",
+    "Due_EN", "Interval_EN", "Ease_EN", "Reps_EN", "Lapses_EN"
   ];
   const PHRASE_HEADERS = [
     "ID", "DateAdded", "Phrase", "Gloss", "Translation", "Snippet",
     "SourceTitle", "SourceURL", "DeepLink", "Note", "Status", "Candidates",
-    "Due", "Interval", "Ease", "Reps", "Lapses"
+    "Due", "Interval", "Ease", "Reps", "Lapses",
+    "Due_EN", "Interval_EN", "Ease_EN", "Reps_EN", "Lapses_EN"
   ];
   // Hidden in Excel: spaced-repetition bookkeeping + the JSON disambiguation blob.
-  const HIDDEN = new Set(["Candidates", "Due", "Interval", "Ease", "Reps", "Lapses"]);
+  const HIDDEN = new Set([
+    "Candidates", "Due", "Interval", "Ease", "Reps", "Lapses",
+    "Due_EN", "Interval_EN", "Ease_EN", "Reps_EN", "Lapses_EN"
+  ]);
 
   const WIDTHS = {
     ID: 10, DateAdded: 11, Term: 18, Lemma: 14, WordClass: 11, Gender: 8,
     Inflections: 26, IPA: 16, AudioURL: 18, Definition: 36, Phrase: 30,
     Gloss: 36, Translation: 36, Snippet: 50, SourceTitle: 24, SourceURL: 24,
     DeepLink: 24, Note: 18, Status: 10, Candidates: 40, Due: 11, Interval: 9, Ease: 7,
-    Reps: 6, Lapses: 7
+    Reps: 6, Lapses: 7,
+    Due_EN: 11, Interval_EN: 11, Ease_EN: 9, Reps_EN: 8, Lapses_EN: 9
   };
 
   function colsFor(headers) {
