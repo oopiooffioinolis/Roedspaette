@@ -99,6 +99,8 @@
         .pill { font-size: 11px; padding: 3px 9px; border-radius: 99px; border: 1px solid #d8d4cd;
                 background: #faf9f7; color: #6b665e; cursor: pointer; }
         .pill[aria-pressed="true"] { background: #C8102E; border-color: #C8102E; color: #fff; }
+        .x { border: none; background: none; font-size: 15px; line-height: 1; color: #a09a91; cursor: pointer; padding: 0 2px; flex: none; }
+        .x:hover { color: #4d483f; }
         label { display: block; font-size: 11px; color: #8a857d; margin: 9px 0 3px; }
         input[type="text"], textarea, select { width: 100%; font-size: 13px; color: #1c1c1c;
                 border: 1px solid #d8d4cd; border-radius: 6px; padding: 6px 8px; background: #fff; }
@@ -127,6 +129,7 @@
             <button class="pill" data-type="word" aria-pressed="${isWord}">Word</button>
             <button class="pill" data-type="phrase" aria-pressed="${!isWord}">Phrase</button>
           </div>
+          <button class="x" id="dv-x" title="Close" aria-label="Close">✕</button>
         </div>
         <label for="dv-term">${isWord ? "Word" : "Phrase"}</label>
         <input class="term" id="dv-term" type="text" value="${esc(text)}">
@@ -174,6 +177,7 @@
       })
     );
     $("#dv-cancel").addEventListener("click", removeCard);
+    $("#dv-x").addEventListener("click", removeCard);
 
     /* live translation preview, editable */
     let trDirty = false;
@@ -415,6 +419,9 @@
         .box { width: 300px; background: #fff; color: #1c1c1c; border: 1px solid #e3e0db;
                border-left: 4px solid #C8102E; border-radius: 9px; padding: 11px 13px 12px;
                box-shadow: 0 8px 26px rgba(20,16,12,.2); }
+        .hd { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+        .x { border: none; background: none; font-size: 15px; line-height: 1; color: #a09a91; cursor: pointer; padding: 0 2px; flex: none; }
+        .x:hover { color: #4d483f; }
         .word { font-size: 15px; font-weight: 700; }
         .base { font-size: 12px; color: #8a857d; margin-left: 6px; font-weight: 400; }
         input { width: 100%; margin-top: 8px; font-size: 13.5px; font-style: italic; color: #2a2722;
@@ -428,7 +435,10 @@
         .status.bad { color: #C8102E; }
       </style>
       <div class="box" role="dialog" aria-label="Translation">
-        <div class="word">${esc(span.textContent)}${showsLemma ? `<span class="base">→ ${esc(entry.lemma)}</span>` : showsTerm ? `<span class="base">→ ${esc(entry.term)}</span>` : ""}</div>
+        <div class="hd">
+          <div class="word">${esc(span.textContent)}${showsLemma ? `<span class="base">→ ${esc(entry.lemma)}</span>` : showsTerm ? `<span class="base">→ ${esc(entry.term)}</span>` : ""}</div>
+          <button class="x" id="dv-hl-x" title="Close" aria-label="Close">✕</button>
+        </div>
         <input id="dv-hl-tr" type="text" value="${esc(entry.t || "")}" placeholder="add a translation…">
         <div class="status" id="dv-hl-status"></div>
         <div class="meta"><span>${esc(entry.set)}</span><span>Enter saves · Esc closes</span></div>
@@ -437,6 +447,7 @@
 
     const input = shadow.querySelector("#dv-hl-tr");
     const status = shadow.querySelector("#dv-hl-status");
+    shadow.querySelector("#dv-hl-x").addEventListener("click", closeTrBox);
 
     if (!entry.t) {
       input.placeholder = "translating…";
@@ -474,6 +485,13 @@
     });
     setTimeout(() => input.focus(), 0);
   }
+
+  /* Esc closes whichever popup is open, wherever focus happens to be. */
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (host) { e.stopPropagation(); removeCard(); }
+    else if (trBox) { e.stopPropagation(); closeTrBox(); }
+  }, true);
 
   /* ====================== messaging ====================== */
 

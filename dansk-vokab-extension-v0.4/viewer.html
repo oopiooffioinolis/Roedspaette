@@ -24,21 +24,19 @@
   </div>
 
   <div id="pop">
-    <div class="word" id="pop-word"></div>
-    <div class="set" id="pop-set"></div>
-    <label for="pop-tr">Translation</label>
-    <input type="text" id="pop-tr" autocomplete="off" autocapitalize="none">
-    <div class="row">
-      <button id="pop-close">Close</button>
-      <button class="primary" id="pop-save">Save translation</button>
+    <div class="pop-hd">
+      <div class="word" id="pop-word"></div>
+      <button id="pop-x" title="Close" aria-label="Close">✕</button>
     </div>
+    <input type="text" id="pop-tr" autocomplete="off" autocapitalize="none" placeholder="add a translation…">
     <div class="msg" id="pop-msg"></div>
+    <div class="pop-meta"><span id="pop-set"></span><span>Enter saves · Esc closes</span></div>
   </div>
 
   <button id="savebar" hidden>＋ Save to vocab</button>
 
   <div id="cap" hidden>
-    <div class="cap-top"><span class="cap-flag" aria-hidden="true"></span><span class="cap-brand">Save to Danish vocab</span><button id="cap-x" title="Close">✕</button></div>
+    <div class="cap-top"><span class="cap-flag" aria-hidden="true"></span><span class="cap-brand">Dansk Vokab</span><button id="cap-x" title="Close">✕</button></div>
     <label for="cap-term">Word / phrase</label>
     <input id="cap-term" type="text" autocomplete="off" autocapitalize="none">
     <label for="cap-tr">Translation — Enter saves</label>

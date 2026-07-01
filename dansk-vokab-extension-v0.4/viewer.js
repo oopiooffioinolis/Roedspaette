@@ -300,7 +300,6 @@ function openPop(span) {
   $("pop-set").textContent = (entry.set || "").replace(/\.xlsx$/i, "");
   $("pop-tr").value = entry.t || "";
   const msg = $("pop-msg"); msg.textContent = entry.id ? "" : "This word has no ID yet — translation can't be saved."; msg.className = "msg" + (entry.id ? "" : " bad");
-  $("pop-save").disabled = !entry.id;
 
   const pop = $("pop");
   pop.style.display = "block";
@@ -319,7 +318,7 @@ document.addEventListener("click", (e) => {
   if (!e.target.closest || !e.target.closest("#pop")) closePop();
 }, true);
 
-$("pop-close").addEventListener("click", closePop);
+$("pop-x").addEventListener("click", closePop);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closePop(); });
 
 async function savePopTranslation() {
@@ -327,10 +326,8 @@ async function savePopTranslation() {
   const translation = $("pop-tr").value.trim();
   const msg = $("pop-msg");
   msg.textContent = "Saving…"; msg.className = "msg";
-  $("pop-save").disabled = true;
   const r = await chrome.runtime.sendMessage({ type: "DV_UPDATE_TRANSLATION", set: popEntry.set, id: popEntry.id, translation })
     .catch((e) => ({ error: e.message }));
-  $("pop-save").disabled = false;
   if (r && r.error) { msg.textContent = r.error; msg.className = "msg bad"; return; }
   msg.textContent = "Saved ✓"; msg.className = "msg ok";
   // update in-memory index + any highlighted spans for this form
@@ -340,7 +337,6 @@ async function savePopTranslation() {
   for (const s of document.querySelectorAll('.dv-known-word[data-form="' + CSS.escape(form) + '"]')) s.title = translation;
   setTimeout(closePop, 500);
 }
-$("pop-save").addEventListener("click", savePopTranslation);
 $("pop-tr").addEventListener("keydown", (e) => { if (e.key === "Enter") savePopTranslation(); });
 
 /* ---------------- capture: card + selection button + shortcuts ---------------- */
