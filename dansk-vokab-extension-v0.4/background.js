@@ -750,11 +750,24 @@ chrome.alarms.onAlarm.addListener((a) => {
   if (a.name === "dv-auto") autoProcess();
 });
 
+function isReaderTab(tab) {
+  return !!(tab && tab.url && tab.url.startsWith(chrome.runtime.getURL("viewer.html")));
+}
+
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId === MENU_ID) startCapture(tab, info.selectionText || "");
+  if (info.menuItemId !== MENU_ID) return;
+  if (isReaderTab(tab)) { chrome.runtime.sendMessage({ type: "DV_READER_CMD", cmd: "capture", text: info.selectionText || "" }); return; }
+  startCapture(tab, info.selectionText || "");
 });
 
 chrome.commands.onCommand.addListener(async (command, tab) => {
+  // In our own reader we can't read the selection from here, so hand off to the
+  // reader page, which reads its own selection and shows the card / toggles HL.
+  if (isReaderTab(tab)) {
+    if (command === "capture-selection") chrome.runtime.sendMessage({ type: "DV_READER_CMD", cmd: "capture" });
+    else if (command === "toggle-highlight") chrome.runtime.sendMessage({ type: "DV_READER_CMD", cmd: "highlight" });
+    return;
+  }
   if (command === "capture-selection") startCapture(tab, "");
   if (command === "toggle-highlight") {
     const res = await toggleHighlight(tab);

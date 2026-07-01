@@ -153,34 +153,23 @@ $("hl").addEventListener("click", async () => {
 
 $("openpdf").addEventListener("click", async () => {
   const btn = $("openpdf");
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab || !tab.url) { say("No active tab.", "bad"); return; }
-  const url = tab.url;
   const viewerBase = chrome.runtime.getURL("viewer.html");
-  if (url.startsWith(viewerBase)) { say("This PDF is already open in the reader.", "ok"); return; }
-  const isPdf = /\.pdf(?:[?#]|$)/i.test(url) ||
-                url.startsWith("chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/");
-  if (!isPdf) { say("Open a PDF in this tab first, then click here.", "bad"); return; }
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const url = (tab && tab.url) || "";
+  const isPdfUrl = /\.pdf(?:[?#]|$)/i.test(url);
 
-  if (/^file:/i.test(url)) {
-    const allowed = await new Promise((res) => {
-      try { chrome.extension.isAllowedFileSchemeAccess((a) => res(!!a)); }
-      catch (_) { res(false); }
-    });
-    if (!allowed) {
-      say("For local files, turn on “Allow access to file URLs” for this extension at chrome://extensions → Details, then try again.", "bad");
-      return;
-    }
-  } else if (/^https?:/i.test(url)) {
+  // If you're already viewing a web PDF, open that one straight away (after
+  // granting access to the site). Otherwise just open the reader's file picker.
+  if (isPdfUrl && /^https?:/i.test(url)) {
     const origin = new URL(url).origin + "/*";
     btn.disabled = true;
     const granted = await chrome.permissions.request({ origins: [origin] }).catch(() => false);
     btn.disabled = false;
-    if (!granted) { say("Access to that site is needed to read its PDF.", "bad"); return; }
+    if (granted) { await chrome.tabs.create({ url: viewerBase + "?file=" + encodeURIComponent(url) }); window.close(); return; }
   }
-
-  const viewerUrl = viewerBase + "?file=" + encodeURIComponent(url);
-  await chrome.tabs.update(tab.id, { url: viewerUrl });
+  // Local PDF already open? Pass its name so the picker shows it. Otherwise blank.
+  const q = (isPdfUrl && /^file:/i.test(url)) ? "?file=" + encodeURIComponent(url) : "";
+  await chrome.tabs.create({ url: viewerBase + q });
   window.close();
 });
 
