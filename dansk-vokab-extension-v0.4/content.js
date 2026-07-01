@@ -243,8 +243,9 @@
 
   /* ====================== known-words highlighter ====================== */
 
-  const HL = { on: false, map: null, spans: [], styleEl: null, clickBound: false };
-  const MAX_SPANS = 3000;
+  const HL = { on: false, map: null, spans: [], styleEl: null, clickBound: false,
+               observer: null, pending: new Set(), flushTimer: null, count: 0 };
+  const MAX_SPANS = 8000; // global cap across the whole (possibly infinite-scroll) page
   let trBox = null;
 
   function injectHlStyle() {
@@ -257,16 +258,19 @@
     document.documentElement.appendChild(HL.styleEl);
   }
 
-  function collectTextNodes() {
+  function collectTextNodes(root) {
     const skip = /^(SCRIPT|STYLE|NOSCRIPT|TEXTAREA|SELECT|OPTION|CODE|PRE)$/;
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
-      acceptNode(n) {
-        const p = n.parentElement;
-        if (!p || skip.test(p.tagName) || p.isContentEditable) return NodeFilter.FILTER_REJECT;
-        if (p.closest(".dv-known-word")) return NodeFilter.FILTER_REJECT;
-        if (!/\p{L}/u.test(n.nodeValue)) return NodeFilter.FILTER_REJECT;
-        return NodeFilter.FILTER_ACCEPT;
-      }
+    const ok = (n) => {
+      const p = n.parentElement;
+      if (!p || skip.test(p.tagName) || p.isContentEditable) return false;
+      if (p.closest(".dv-known-word")) return false;
+      return /\p{L}/u.test(n.nodeValue);
+    };
+    if (root && root.nodeType === 3) return ok(root) ? [root] : [];
+    const base = root && root.nodeType === 1 ? root : document.body;
+    if (!base) return [];
+    const walker = document.createTreeWalker(base, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => (ok(n) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT)
     });
     const nodes = [];
     let n;
@@ -274,12 +278,13 @@
     return nodes;
   }
 
-  function wrapMatches() {
-    const nodes = collectTextNodes();
+  function wrapMatches(root) {
+    if (HL.count >= MAX_SPANS) return 0;
+    const nodes = collectTextNodes(root);
     const re = /\p{L}+/gu;
     let count = 0;
     for (const node of nodes) {
-      if (count >= MAX_SPANS) break;
+      if (HL.count >= MAX_SPANS) break;
       const text = node.nodeValue;
       let m, last = 0, frag = null;
       re.lastIndex = 0;
@@ -295,7 +300,8 @@
         frag.appendChild(s);
         HL.spans.push(s);
         last = m.index + m[0].length;
-        if (++count >= MAX_SPANS) break;
+        count++;
+        if (++HL.count >= MAX_SPANS) break;
       }
       if (frag) {
         if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
@@ -303,6 +309,47 @@
       }
     }
     return count;
+  }
+
+  /* Keep highlighting content that arrives after load (infinite scroll, SPA
+     route changes). We disconnect while writing our own spans so we never
+     observe — and re-process — our own edits. */
+  function startObserver() {
+    if (HL.observer || !document.body) return;
+    HL.observer = new MutationObserver((muts) => {
+      if (!HL.on) return;
+      for (const m of muts) {
+        for (const n of m.addedNodes) {
+          if (n.nodeType === 1) {
+            if (n.classList && n.classList.contains("dv-known-word")) continue;
+            if (n === HL.styleEl) continue;
+            HL.pending.add(n);
+          } else if (n.nodeType === 3) {
+            HL.pending.add(n);
+          }
+        }
+      }
+      if (HL.pending.size) scheduleFlush();
+    });
+    HL.observer.observe(document.body, { childList: true, subtree: true });
+  }
+  function scheduleFlush() {
+    if (HL.flushTimer) return;
+    HL.flushTimer = setTimeout(flushPending, 350);
+  }
+  function flushPending() {
+    HL.flushTimer = null;
+    if (!HL.on || !HL.pending.size) { HL.pending.clear(); return; }
+    const roots = [...HL.pending];
+    HL.pending.clear();
+    if (HL.observer) HL.observer.disconnect();
+    for (const r of roots) { if (r.isConnected) wrapMatches(r); }
+    if (HL.on && HL.observer) HL.observer.observe(document.body, { childList: true, subtree: true });
+  }
+  function stopObserver() {
+    if (HL.observer) { HL.observer.disconnect(); HL.observer = null; }
+    if (HL.flushTimer) { clearTimeout(HL.flushTimer); HL.flushTimer = null; }
+    HL.pending.clear();
   }
 
   function onHlClick(e) {
@@ -318,9 +365,11 @@
   function hlOn(words) {
     if (HL.on) return HL.spans.length;
     HL.map = new Map(Object.entries(words || {}));
+    HL.count = 0;
     injectHlStyle();
-    const count = wrapMatches();
+    const count = wrapMatches(document.body);
     HL.on = true;
+    startObserver();
     if (!HL.clickBound) {
       document.addEventListener("click", onHlClick, true);
       HL.clickBound = true;
@@ -330,11 +379,13 @@
 
   function hlOff() {
     closeTrBox();
+    stopObserver();
     for (const s of HL.spans) {
       if (s.isConnected) s.replaceWith(document.createTextNode(s.textContent));
     }
     HL.spans = [];
     HL.on = false;
+    HL.count = 0;
     if (HL.styleEl) { HL.styleEl.remove(); HL.styleEl = null; }
   }
 
