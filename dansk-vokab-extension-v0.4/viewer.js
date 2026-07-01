@@ -23,6 +23,27 @@ function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+/* Load the raw PDF bytes ourselves. fetch() can't read file:// in Chrome, but
+   XMLHttpRequest can (with "Allow access to file URLs" on), and for http(s) it
+   works once the site's access has been granted. We then hand the bytes to
+   PDF.js as {data}, so PDF.js never has to fetch anything itself. */
+function loadBytes(url) {
+  return new Promise((resolve, reject) => {
+    let xhr;
+    try { xhr = new XMLHttpRequest(); xhr.open("GET", url, true); }
+    catch (e) { reject(new Error("bad-url")); return; }
+    xhr.responseType = "arraybuffer";
+    xhr.onload = () => {
+      const ok = xhr.status === 0 || (xhr.status >= 200 && xhr.status < 300); // file:// resolves as status 0
+      if (ok && xhr.response && xhr.response.byteLength) resolve(new Uint8Array(xhr.response));
+      else if (ok) reject(new Error("empty"));
+      else reject(new Error("http-" + xhr.status));
+    };
+    xhr.onerror = () => reject(new Error("access"));
+    xhr.send();
+  });
+}
+
 async function main() {
   if (!fileUrl) { showError("No file was specified."); return; }
   const name = fileName(fileUrl);
@@ -32,15 +53,23 @@ async function main() {
 
   let doc;
   try {
-    doc = await pdfjsLib.getDocument({ url: fileUrl, isEvalSupported: false }).promise;
+    const data = await loadBytes(fileUrl);
+    doc = await pdfjsLib.getDocument({ data, isEvalSupported: false }).promise;
   } catch (e) {
     const isFile = /^file:/i.test(fileUrl);
+    const reason = e && e.message;
+    let advice;
+    if (isFile) {
+      advice = `<p>This is a local file. Make sure <b>“Allow access to file URLs”</b> is on for Dansk Vokab at <code>chrome://extensions</code> → Details, then <b>reload the extension</b> and reopen the PDF (the toggle only takes effect after a reload).</p>` +
+        `<p>OneDrive note: if the file shows a cloud icon, right-click it in Explorer → <b>Always keep on this device</b> so it's a real local file.</p>`;
+    } else if (reason === "access") {
+      advice = `<p>The extension isn't allowed to read this site yet. Reopen it from the extension popup and approve access when Chrome asks.</p>`;
+    } else {
+      advice = `<p>The server may have blocked the request, or the file needs a login.</p>`;
+    }
     showError(
-      `<p>Couldn't open this PDF.</p>` +
-      (isFile
-        ? `<p>For local files, enable <b>“Allow access to file URLs”</b> for Dansk Vokab at <code>chrome://extensions</code> → Details, then reopen.</p>`
-        : `<p>The extension may not have permission to read this site's files, or the server blocked the request.</p>`) +
-      `<p style="opacity:.7">${esc(e.message || String(e))}</p>` +
+      `<p>Couldn't open this PDF.</p>` + advice +
+      `<p style="opacity:.7">Details: ${esc(reason || String(e))}</p>` +
       `<p><a href="${esc(fileUrl)}">Open the PDF directly ↗</a></p>`
     );
     setStatus("");
