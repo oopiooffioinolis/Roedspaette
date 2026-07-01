@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Dansk Vokab",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Highlight Danish words and phrases on any page and save them into Excel vocab sets in your private GitHub repo \u2014 with ordnet.dk lookups, free on-device translation, and a known-words reader mode.",
   "permissions": [
     "contextMenus",
@@ -16,6 +16,21 @@
     "https://api.github.com/*",
     "https://ordnet.dk/*",
     "https://gammel.ordnet.dk/*"
+  ],
+  "optional_host_permissions": [
+    "*://*/*"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "viewer.html",
+        "viewer.js",
+        "viewer.css",
+        "lib/pdfjs/pdf.mjs",
+        "lib/pdfjs/pdf.worker.mjs"
+      ],
+      "matches": ["<all_urls>"]
+    }
   ],
   "background": {
     "service_worker": "background.js"

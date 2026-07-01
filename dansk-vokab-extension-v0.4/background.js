@@ -593,21 +593,57 @@ function looksLikeWord(text) {
 }
 
 function minimalEntry(text, tab) {
+  const realUrl = viewerFileUrl(tab?.url || "") || tab?.url || "";
   return {
     id: crypto.randomUUID(),
     type: looksLikeWord(text) ? "word" : "phrase",
     term: text.trim().replace(/\s+/g, " "),
     snippet: "",
     sourceTitle: tab?.title || "",
-    sourceURL: tab?.url || "",
+    sourceURL: realUrl,
     deepLink: "",
     note: "",
     dateAdded: new Date().toISOString().slice(0, 10)
   };
 }
 
+/* Chrome's built-in PDF viewer renders through an out-of-process plugin: content
+   scripts can't read window.getSelection() there, nor render our capture card. The
+   context menu still hands us the selected text, so for PDFs we save straight from
+   the background (still DDO-enriched via saveEntry) instead of injecting a card. */
+function isPdfTab(tab) {
+  const u = (tab && tab.url) || "";
+  return /\.pdf(?:[?#]|$)/i.test(u) ||
+         u.startsWith("chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/") || // built-in PDF viewer
+         !!viewerFileUrl(u);                                                     // our own bundled reader
+}
+
+/* If this is our bundled reader (viewer.html?file=…), return the real PDF URL. */
+function viewerFileUrl(url) {
+  try {
+    const u = new URL(url);
+    if (u.protocol === "chrome-extension:" && u.hostname === chrome.runtime.id && u.pathname.endsWith("/viewer.html")) {
+      return u.searchParams.get("file") || "";
+    }
+  } catch (_) {}
+  return "";
+}
+
+async function captureInBackground(tab, text) {
+  const res = await saveEntry(minimalEntry(text, tab));
+  reportSave(res, text);
+  return res;
+}
+
 async function startCapture(tab, fallbackText) {
   if (!tab?.id) return;
+  const text = (fallbackText || "").trim();
+  if (isPdfTab(tab)) {
+    if (text) await captureInBackground(tab, text);
+    else notify("Dansk Vokab",
+      "Select a word in the PDF, then right-click → “Save … to Danish vocab”. (The keyboard shortcut can’t read a PDF selection.)");
+    return;
+  }
   const { activeSet, sets } = await getState();
   try {
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js"] });
@@ -615,15 +651,11 @@ async function startCapture(tab, fallbackText) {
       type: "DV_SHOW_CARD",
       activeSet,
       sets,
-      fallbackText: fallbackText || ""
+      fallbackText: text
     });
   } catch (e) {
-    if (fallbackText && fallbackText.trim()) {
-      const res = await saveEntry(minimalEntry(fallbackText, tab));
-      reportSave(res, fallbackText);
-    } else {
-      notify("Dansk Vokab", "Can't capture on this page.");
-    }
+    if (text) await captureInBackground(tab, text);
+    else notify("Dansk Vokab", "Can't capture on this page.");
   }
 }
 
@@ -754,6 +786,10 @@ async function handleMessage(msg, sender) {
     case "DV_TOGGLE_HIGHLIGHT": {
       const tab = msg.tabId ? { id: msg.tabId } : sender.tab;
       return toggleHighlight(tab);
+    }
+    case "DV_GET_HL_WORDS": {
+      if (!configured(cfg)) return { error: "not-configured" };
+      return { words: await buildHighlightIndex(cfg) };
     }
     case "DV_UPDATE_TRANSLATION": {
       if (!configured(cfg)) return { error: "not-configured" };

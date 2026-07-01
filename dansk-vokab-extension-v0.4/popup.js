@@ -151,6 +151,39 @@ $("hl").addEventListener("click", async () => {
   else say("Highlights removed.", "ok");
 });
 
+$("openpdf").addEventListener("click", async () => {
+  const btn = $("openpdf");
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab || !tab.url) { say("No active tab.", "bad"); return; }
+  const url = tab.url;
+  const viewerBase = chrome.runtime.getURL("viewer.html");
+  if (url.startsWith(viewerBase)) { say("This PDF is already open in the reader.", "ok"); return; }
+  const isPdf = /\.pdf(?:[?#]|$)/i.test(url) ||
+                url.startsWith("chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/");
+  if (!isPdf) { say("Open a PDF in this tab first, then click here.", "bad"); return; }
+
+  if (/^file:/i.test(url)) {
+    const allowed = await new Promise((res) => {
+      try { chrome.extension.isAllowedFileSchemeAccess((a) => res(!!a)); }
+      catch (_) { res(false); }
+    });
+    if (!allowed) {
+      say("For local files, turn on “Allow access to file URLs” for this extension at chrome://extensions → Details, then try again.", "bad");
+      return;
+    }
+  } else if (/^https?:/i.test(url)) {
+    const origin = new URL(url).origin + "/*";
+    btn.disabled = true;
+    const granted = await chrome.permissions.request({ origins: [origin] }).catch(() => false);
+    btn.disabled = false;
+    if (!granted) { say("Access to that site is needed to read its PDF.", "bad"); return; }
+  }
+
+  const viewerUrl = viewerBase + "?file=" + encodeURIComponent(url);
+  await chrome.tabs.update(tab.id, { url: viewerUrl });
+  window.close();
+});
+
 $("pending").addEventListener("click", async () => {
   const btn = $("pending");
   btn.disabled = true;
