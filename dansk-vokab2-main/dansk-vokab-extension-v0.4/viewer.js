@@ -122,6 +122,7 @@ async function openData(data, name, srcUrl) {
     }
   }, { rootMargin: "800px 0px" });
   state.pages.forEach((p) => io.observe(p.holder));
+  maybeAutoHighlight();
 }
 
 /* File picker for local PDFs. */
@@ -249,6 +250,7 @@ async function toggleHighlight() {
     state.hlOn = false;
     btn.classList.remove("on");
     setStatus(state.doc ? `${state.doc.numPages} pages` : "");
+    chrome.runtime.sendMessage({ type: "DV_SET_AUTO_HL", on: false }).catch(() => {});
     return;
   }
   btn.disabled = true;
@@ -261,8 +263,26 @@ async function toggleHighlight() {
   btn.classList.add("on");
   const count = highlightAll();
   setStatus(`${count} known word${count === 1 ? "" : "s"} on rendered pages`);
+  // Persist the mode so it stays on for future PDFs and web pages. Best-effort
+  // ask for all-sites access so web pages auto-highlight too (needs a gesture).
+  try { await chrome.permissions.request({ origins: ["*://*/*"] }); } catch (_) {}
+  chrome.runtime.sendMessage({ type: "DV_SET_AUTO_HL", on: true }).catch(() => {});
 }
 $("hl").addEventListener("click", toggleHighlight);
+
+async function maybeAutoHighlight() {
+  try {
+    const a = await chrome.runtime.sendMessage({ type: "DV_GET_AUTO_HL" });
+    if (!a || !a.auto || state.hlOn) return;
+    const r = await chrome.runtime.sendMessage({ type: "DV_GET_HL_WORDS" });
+    if (!r || r.error || !r.words) return;
+    state.map = new Map(Object.entries(r.words));
+    state.hlOn = true;
+    $("hl").classList.add("on");
+    highlightAll();
+    setStatus("known words highlighted");
+  } catch (_) {}
+}
 
 /* ---------------- translation popover ---------------- */
 

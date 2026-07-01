@@ -567,6 +567,64 @@ async function toggleHighlight(tab) {
   return chrome.tabs.sendMessage(tab.id, { type: "DV_HIGHLIGHT", action: "on", words });
 }
 
+/* Force highlight on or off for one tab (used when flipping the persistent mode). */
+async function applyHighlight(tab, on) {
+  if (!tab?.id) return { error: "No tab." };
+  const { cfg } = await getState();
+  if (on && !configured(cfg)) return { error: "Not set up yet — open options first." };
+  try {
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js"] });
+  } catch (e) {
+    return { error: "Can't highlight on this page." };
+  }
+  if (!on) return chrome.tabs.sendMessage(tab.id, { type: "DV_HIGHLIGHT", action: "off" }).catch(() => ({ on: false }));
+  const words = await buildHighlightIndex(cfg);
+  return chrome.tabs.sendMessage(tab.id, { type: "DV_HIGHLIGHT", action: "on", words });
+}
+
+/* Persistent "highlight known words everywhere" mode. When on, a dynamic content
+   script auto-highlights every page on load (needs all-sites access, requested
+   from the popup/reader). The reader reads the same flag to auto-highlight PDFs. */
+const AUTO_HL_ID = "dv-auto-hl";
+
+async function registerAutoHl() {
+  try {
+    const has = await chrome.permissions.contains({ origins: ["*://*/*"] });
+    if (!has) return false; // no broad access yet; UI should request it
+    const existing = await chrome.scripting.getRegisteredContentScripts({ ids: [AUTO_HL_ID] }).catch(() => []);
+    if (!existing.length) {
+      await chrome.scripting.registerContentScripts([{
+        id: AUTO_HL_ID, js: ["content.js"], matches: ["*://*/*"], runAt: "document_idle", allFrames: false
+      }]);
+    }
+    return true;
+  } catch (_) { return false; }
+}
+
+async function unregisterAutoHl() {
+  try { await chrome.scripting.unregisterContentScripts({ ids: [AUTO_HL_ID] }); } catch (_) {}
+}
+
+async function setAutoHighlight(on) {
+  await chrome.storage.local.set({ hlAuto: !!on });
+  if (on) {
+    await registerAutoHl();
+  } else {
+    await unregisterAutoHl();
+    // best-effort: remove existing highlights from any open pages right away
+    const tabs = await chrome.tabs.query({}).catch(() => []);
+    for (const t of tabs) {
+      if (t.id != null) chrome.tabs.sendMessage(t.id, { type: "DV_HIGHLIGHT", action: "off" }).catch(() => {});
+    }
+  }
+  return !!on;
+}
+
+async function ensureAutoHlRegistration() {
+  const { hlAuto } = await chrome.storage.local.get({ hlAuto: false });
+  if (hlAuto) await registerAutoHl();
+}
+
 async function updateTranslation(cfg, setName, id, translation) {
   return serialized(async () => {
     const file = await getFile(cfg, setName);
@@ -739,11 +797,13 @@ chrome.runtime.onInstalled.addListener(() => {
   });
   chrome.alarms.create("dv-auto", { periodInMinutes: 15, delayInMinutes: 1 });
   setBadge();
+  ensureAutoHlRegistration();
 });
 
 chrome.runtime.onStartup.addListener(() => {
   chrome.alarms.create("dv-auto", { periodInMinutes: 15, delayInMinutes: 1 });
   autoProcess();
+  ensureAutoHlRegistration();
 });
 
 chrome.alarms.onAlarm.addListener((a) => {
@@ -770,8 +830,12 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
   }
   if (command === "capture-selection") startCapture(tab, "");
   if (command === "toggle-highlight") {
-    const res = await toggleHighlight(tab);
+    const { hlAuto } = await chrome.storage.local.get({ hlAuto: false });
+    const on = !hlAuto;
+    await setAutoHighlight(on);              // note: registers only if all-sites already granted
+    const res = await applyHighlight(tab, on);
     if (res && res.error) notify("Dansk Vokab", res.error);
+    else notify("Dansk Vokab", on ? "Highlighting known words (stays on across pages)." : "Highlighting turned off.");
   }
 });
 
@@ -803,6 +867,18 @@ async function handleMessage(msg, sender) {
     case "DV_GET_HL_WORDS": {
       if (!configured(cfg)) return { error: "not-configured" };
       return { words: await buildHighlightIndex(cfg) };
+    }
+    case "DV_GET_AUTO_HL": {
+      const { hlAuto } = await chrome.storage.local.get({ hlAuto: false });
+      return { auto: !!hlAuto };
+    }
+    case "DV_SET_AUTO_HL": {
+      const auto = await setAutoHighlight(!!msg.on);
+      return { auto };
+    }
+    case "DV_APPLY_HL": {
+      const tab = msg.tabId ? { id: msg.tabId } : sender.tab;
+      return applyHighlight(tab, !!msg.on);
     }
     case "DV_UPDATE_TRANSLATION": {
       if (!configured(cfg)) return { error: "not-configured" };

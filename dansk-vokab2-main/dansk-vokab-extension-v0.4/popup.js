@@ -46,6 +46,7 @@ async function refresh(remote) {
     $("last").textContent = `Last saved: “${st.lastSaved.term}” → ${st.lastSaved.set} at ${t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`;
   }
   loadChoices();
+  send({ type: "DV_GET_AUTO_HL" }).then((a) => paintHl(a && a.auto)).catch(() => {});
 }
 
 /* ---------- disambiguation (pick a sense) ---------- */
@@ -139,16 +140,36 @@ $("retry").addEventListener("click", async () => {
   refresh(false);
 });
 
+function paintHl(auto) {
+  const btn = $("hl");
+  if (!btn) return;
+  btn.textContent = auto ? "✓ Highlighting known words — on" : "Highlight known words (stay on)";
+  btn.classList.toggle("primary", !!auto);
+}
+
 $("hl").addEventListener("click", async () => {
   const btn = $("hl");
   btn.disabled = true;
-  say("Building word index…");
+  const cur = (await send({ type: "DV_GET_AUTO_HL" }).catch(() => ({ auto: false }))).auto;
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  const r = tab ? await send({ type: "DV_TOGGLE_HIGHLIGHT", tabId: tab.id }) : { error: "No active tab." };
-  btn.disabled = false;
-  if (r?.error) { say(r.error, "bad"); return; }
-  if (r?.on) say(`Highlighted ${r.count} known word${r.count === 1 ? "" : "s"}. Click one to see/edit its translation.`, "ok");
-  else say("Highlights removed.", "ok");
+  if (!cur) {
+    say("Turning on…");
+    const granted = await chrome.permissions.request({ origins: ["*://*/*"] }).catch(() => false);
+    await send({ type: "DV_SET_AUTO_HL", on: true });
+    const r = tab ? await send({ type: "DV_APPLY_HL", tabId: tab.id, on: true }).catch((e) => ({ error: e.message })) : null;
+    btn.disabled = false;
+    paintHl(true);
+    if (r && r.error) say(r.error, "bad");
+    else say(granted
+      ? `Highlighting on${r && r.count != null ? ` — ${r.count} here` : ""}. It stays on across pages until you turn it off.`
+      : "On for pages I can access. To cover every page automatically, allow access to all sites when Chrome asks.", "ok");
+  } else {
+    await send({ type: "DV_SET_AUTO_HL", on: false });
+    if (tab) await send({ type: "DV_APPLY_HL", tabId: tab.id, on: false }).catch(() => {});
+    btn.disabled = false;
+    paintHl(false);
+    say("Highlighting off.", "ok");
+  }
 });
 
 $("openpdf").addEventListener("click", async () => {

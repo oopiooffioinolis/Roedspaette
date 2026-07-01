@@ -316,6 +316,7 @@
   }
 
   function hlOn(words) {
+    if (HL.on) return HL.spans.length;
     HL.map = new Map(Object.entries(words || {}));
     injectHlStyle();
     const count = wrapMatches();
@@ -442,4 +443,14 @@
     }
     return false;
   });
+
+  /* When the persistent highlight mode is on, highlight automatically on load. */
+  (async () => {
+    try {
+      const { hlAuto } = await chrome.storage.local.get({ hlAuto: false });
+      if (!hlAuto || HL.on) return;
+      const r = await chrome.runtime.sendMessage({ type: "DV_GET_HL_WORDS" });
+      if (r && r.words && !HL.on) hlOn(r.words);
+    } catch (_) {}
+  })();
 })();
