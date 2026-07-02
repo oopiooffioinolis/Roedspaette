@@ -30,7 +30,7 @@ function configured(cfg) {
 
 async function setBadge() {
   const { queue } = await getState();
-  await chrome.action.setBadgeBackgroundColor({ color: "#C8102E" });
+  await chrome.action.setBadgeBackgroundColor({ color: "#8A2318" });
   await chrome.action.setBadgeText({ text: queue.length ? String(queue.length) : "" });
 }
 
@@ -285,12 +285,30 @@ async function listSetFiles(cfg) {
   const json = await res.json();
   return (Array.isArray(json) ? json : [])
     .filter((f) => f.type === "file" && /\.xlsx$/i.test(f.name))
-    .map((f) => ({ name: f.name, sha: f.sha }))
+    .map((f) => ({ name: f.name, sha: f.sha, size: f.size || 0 }))
     .sort((a, b) => a.name.localeCompare(b.name, "da"));
 }
 
 async function listSets(cfg) {
   return (await listSetFiles(cfg)).map((f) => f.name);
+}
+
+/* sets/index.json — a plain JSON array of family labels (["Nyheder", "Arbejde"…])
+   kept in the repo so the iPhone Shortcut can offer a "Choose from List" picker
+   without parsing the folder listing. Best-effort; never blocks a save. */
+async function updateSetsIndex(cfg) {
+  try {
+    const files = await listSetFiles(cfg);
+    const bases = VS.groupFamilies(files).map((f) => f.base);
+    const body = JSON.stringify(bases);
+    const rel = `${cfg.folder}/index.json`;
+    const existing = await getFileAt(cfg, rel).catch(() => null);
+    if (existing && VS.decodeB64Utf8(existing.b64).trim() === body) return;
+    const b64 = btoa(unescape(encodeURIComponent(body)));
+    const payload = { message: "Update set index for the iPhone Shortcut", content: b64 };
+    if (existing) payload.sha = existing.sha;
+    await gh(cfg, repoPath(cfg, rel), { method: "PUT", body: JSON.stringify(payload) });
+  } catch (_) { /* index is a convenience — never fail a save over it */ }
 }
 
 /* ---------- save pipeline (serialized to avoid sha races) ---------- */
@@ -302,27 +320,67 @@ function serialized(fn) {
   return p;
 }
 
+/* Walks a set's family (Name.xlsx, Name-2.xlsx, …) to the newest existing part,
+   and rolls to a fresh part when that one is full. Returns { name, file, base }. */
+async function resolveTargetFile(cfg, setName) {
+  const fam = VS.setFamily(setName);
+  let num = fam.num;
+  let name = setName;
+  let file = await getFile(cfg, name);
+  while (file !== null) {
+    const nextName = VS.familyFile(fam.base, num + 1);
+    const nextFile = await getFile(cfg, nextName);
+    if (nextFile === null) break;
+    num++; name = nextName; file = nextFile;
+  }
+  if (file && VS.b64Bytes(file.b64) >= VS.SIZE_FULL) {
+    num++;
+    name = VS.familyFile(fam.base, num);
+    file = null; // brand-new part; the family still reads as one deck
+    notify("Rødspætte — new file started", `${VS.familyFile(fam.base, num - 1)} is full. Continuing in ${name}; the apps keep showing one “${fam.base}” deck.`);
+  }
+  return { name, file, base: fam.base };
+}
+
+/* Warn once per file when it crosses the 95 % mark. */
+async function maybeWarnCapacity(name, b64) {
+  const bytes = VS.b64Bytes(b64);
+  if (bytes < VS.SIZE_FULL * VS.SIZE_WARN_RATIO) return;
+  const { capWarned } = await chrome.storage.local.get({ capWarned: {} });
+  if (capWarned[name]) return;
+  capWarned[name] = true;
+  await chrome.storage.local.set({ capWarned });
+  const fam = VS.setFamily(name);
+  notify("Rødspætte — set almost full",
+    `${name} is at ${Math.round((bytes / VS.SIZE_FULL) * 100)} % of its safe size. The next capture past full starts ${VS.familyFile(fam.base, fam.num + 1)} automatically.`);
+}
+
 async function appendToSet(cfg, setName, entry) {
-  let file = await getFile(cfg, setName);
-  let wb = file ? VS.readWorkbook(file.b64) : VS.newWorkbook(setName.replace(/\.xlsx$/i, ""));
+  const target = await resolveTargetFile(cfg, setName);
+  let name = target.name;
+  let file = target.file;
+  let wb = file ? VS.readWorkbook(file.b64) : VS.newWorkbook(target.base);
   let result = VS.appendEntry(wb, entry);
-  if (result.duplicate) return { duplicate: true, set: setName };
+  if (result.duplicate) return { duplicate: true, set: name };
   const label = entry.type === "word" ? "word" : "phrase";
-  const msg = `Add ${label} "${entry.term}" to ${setName}`;
+  const msg = `Add ${label} "${entry.term}" to ${name}`;
+  let written = VS.writeWorkbook(wb);
   try {
-    await putFile(cfg, setName, VS.writeWorkbook(wb), msg, file ? file.sha : undefined);
+    await putFile(cfg, name, written, msg, file ? file.sha : undefined);
   } catch (e) {
     if (e.status === 409 || e.status === 422) {
-      file = await getFile(cfg, setName);
-      wb = file ? VS.readWorkbook(file.b64) : VS.newWorkbook(setName.replace(/\.xlsx$/i, ""));
+      file = await getFile(cfg, name);
+      wb = file ? VS.readWorkbook(file.b64) : VS.newWorkbook(target.base);
       result = VS.appendEntry(wb, entry);
-      if (result.duplicate) return { duplicate: true, set: setName };
-      await putFile(cfg, setName, VS.writeWorkbook(wb), msg, file ? file.sha : undefined);
+      if (result.duplicate) return { duplicate: true, set: name };
+      written = VS.writeWorkbook(wb);
+      await putFile(cfg, name, written, msg, file ? file.sha : undefined);
     } else {
       throw e;
     }
   }
-  return { duplicate: false, set: setName, status: entry.status, counts: VS.counts(wb) };
+  await maybeWarnCapacity(name, written);
+  return { duplicate: false, set: name, status: entry.status, counts: VS.counts(wb) };
 }
 
 async function saveEntry(entry) {
@@ -453,8 +511,13 @@ async function processInbox(cfg, activeSet, knownSets) {
         skipped++;
         continue;
       }
-      // a payload may target a set, but only one that already exists — typos can't spawn files
-      const setName = (entry.set && knownSets.includes(entry.set)) ? entry.set : activeSet;
+      // a payload may target a set family, but only one that already exists — typos can't spawn files
+      let setName = activeSet;
+      if (entry.set) {
+        const wantedBase = VS.setFamily(entry.set).base.toLowerCase();
+        const match = knownSets.find((n) => VS.setFamily(n).base.toLowerCase() === wantedBase);
+        if (match) setName = match;
+      }
       delete entry.set;
       await enrichEntry(entry, cfg);
       const res = await appendToSet(cfg, setName, entry);
@@ -703,12 +766,15 @@ async function startCapture(tab, fallbackText) {
     return;
   }
   const { activeSet, sets } = await getState();
+  // The card offers one entry per set family; saves land in the family's newest part.
+  const famBases = VS.groupFamilies(sets.map((n) => ({ name: n }))).map((f) => VS.familyFile(f.base, 1));
+  const activeFam = activeSet ? VS.familyFile(VS.setFamily(activeSet).base, 1) : (famBases[0] || "");
   try {
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js"] });
     await chrome.tabs.sendMessage(tab.id, {
       type: "DV_SHOW_CARD",
-      activeSet,
-      sets,
+      activeSet: activeFam,
+      sets: famBases,
       fallbackText: text
     });
   } catch (e) {
@@ -884,19 +950,24 @@ async function handleMessage(msg, sender) {
       if (!configured(cfg)) return { error: "not-configured" };
       return updateTranslation(cfg, msg.set, msg.id, msg.translation);
     }
-    case "DV_GET_STATE":
+    case "DV_GET_STATE": {
+      const { setFiles } = await chrome.storage.local.get({ setFiles: [] });
       return {
         configured: configured(cfg),
         owner: cfg.owner, repo: cfg.repo, folder: cfg.folder,
-        activeSet: state.activeSet, sets: state.sets,
+        activeSet: state.activeSet, sets: state.sets, setFiles,
+        sizeFull: VS.SIZE_FULL, warnRatio: VS.SIZE_WARN_RATIO,
         queue: state.queue.length, lastSaved: state.lastSaved
       };
+    }
     case "DV_REFRESH_SETS": {
       if (!configured(cfg)) return { error: "not-configured" };
-      const sets = await listSets(cfg);
+      const files = await listSetFiles(cfg);
+      const sets = files.map((f) => f.name);
       const activeSet = sets.includes(state.activeSet) ? state.activeSet : (sets[0] || "");
-      await chrome.storage.local.set({ sets, activeSet });
-      return { sets, activeSet };
+      await chrome.storage.local.set({ sets, activeSet, setFiles: files });
+      updateSetsIndex(cfg);
+      return { sets, activeSet, setFiles: files, sizeFull: VS.SIZE_FULL, warnRatio: VS.SIZE_WARN_RATIO };
     }
     case "DV_SET_ACTIVE":
       await chrome.storage.local.set({ activeSet: msg.set });
@@ -909,9 +980,11 @@ async function handleMessage(msg, sender) {
       if ((await getFile(cfg, name)) !== null) return { error: `${name} already exists.` };
       const wb = VS.newWorkbook(clean);
       await putFile(cfg, name, VS.writeWorkbook(wb), `Create vocab set ${name}`);
-      const sets = await listSets(cfg);
-      await chrome.storage.local.set({ sets, activeSet: name });
-      return { ok: true, name, sets };
+      const files = await listSetFiles(cfg);
+      const sets = files.map((f) => f.name);
+      await chrome.storage.local.set({ sets, activeSet: name, setFiles: files });
+      updateSetsIndex(cfg);
+      return { ok: true, name, sets, setFiles: files };
     }
     case "DV_PROCESS_ALL": {
       if (!configured(cfg)) return { error: "not-configured" };

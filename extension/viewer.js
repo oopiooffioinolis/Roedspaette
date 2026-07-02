@@ -122,7 +122,6 @@ async function openData(data, name, srcUrl) {
     }
   }, { rootMargin: "800px 0px" });
   state.pages.forEach((p) => io.observe(p.holder));
-  maybeAutoHighlight();
 }
 
 /* File picker for local PDFs. */
@@ -176,8 +175,6 @@ async function renderPage(p, targetW) {
   const textLayer = new pdfjsLib.TextLayer({ textContentSource: await page.getTextContent(), container: tl, viewport });
   await textLayer.render();
   p.textLayer = tl;
-
-  if (state.hlOn && state.map) highlightContainer(tl);
 }
 
 /* ---------------- known-words highlighter ---------------- */
@@ -243,46 +240,8 @@ function unhighlightAll() {
   for (const p of state.pages) if (p.textLayer) p.textLayer.normalize();
 }
 
-async function toggleHighlight() {
-  const btn = $("hl");
-  if (state.hlOn) {
-    unhighlightAll();
-    state.hlOn = false;
-    btn.classList.remove("on");
-    setStatus(state.doc ? `${state.doc.numPages} pages` : "");
-    chrome.runtime.sendMessage({ type: "DV_SET_AUTO_HL", on: false }).catch(() => {});
-    return;
-  }
-  btn.disabled = true;
-  setStatus("Building word index…");
-  const r = await chrome.runtime.sendMessage({ type: "DV_GET_HL_WORDS" }).catch((e) => ({ error: e.message }));
-  btn.disabled = false;
-  if (!r || r.error) { setStatus(r && r.error === "not-configured" ? "Set up the extension first (Options)." : "Couldn't build the index."); return; }
-  state.map = new Map(Object.entries(r.words || {}));
-  state.hlOn = true;
-  btn.classList.add("on");
-  const count = highlightAll();
-  setStatus(`${count} known word${count === 1 ? "" : "s"}`);
-  // Persist the mode so it stays on for future PDFs and web pages. Best-effort
-  // ask for all-sites access so web pages auto-highlight too (needs a gesture).
-  try { await chrome.permissions.request({ origins: ["*://*/*"] }); } catch (_) {}
-  chrome.runtime.sendMessage({ type: "DV_SET_AUTO_HL", on: true }).catch(() => {});
-}
-$("hl").addEventListener("click", toggleHighlight);
-
-async function maybeAutoHighlight() {
-  try {
-    const a = await chrome.runtime.sendMessage({ type: "DV_GET_AUTO_HL" });
-    if (!a || !a.auto || state.hlOn) return;
-    const r = await chrome.runtime.sendMessage({ type: "DV_GET_HL_WORDS" });
-    if (!r || r.error || !r.words) return;
-    state.map = new Map(Object.entries(r.words));
-    state.hlOn = true;
-    $("hl").classList.add("on");
-    highlightAll();
-    setStatus("Highlighting on");
-  } catch (_) {}
-}
+/* Highlighting known words inside PDFs was removed by design — the reader is for
+   reading and capturing only. */
 
 /* ---------------- translation popover ---------------- */
 
@@ -386,10 +345,15 @@ async function openCaptureCard(text, rect) {
 
   const setSel = $("cap-set");
   setSel.innerHTML = "";
-  const sets = (capState && capState.sets) || [];
-  const active = (capState && capState.activeSet) || sets[0] || "";
+  const VSv = self.VocabSheets;
+  const rawSets = (capState && capState.sets) || [];
+  // one entry per set family; the save lands in the family's newest file
+  const seen = new Set(); const sets = [];
+  for (const s of rawSets) { const b = VSv.setFamily(s).base; if (!seen.has(b)) { seen.add(b); sets.push(b + ".xlsx"); } }
+  const activeBase = capState && capState.activeSet ? VSv.setFamily(capState.activeSet).base : "";
+  const active = activeBase ? activeBase + ".xlsx" : (sets[0] || "");
   if (sets.length) {
-    for (const s of sets) { const o = document.createElement("option"); o.textContent = s; o.selected = s === active; setSel.appendChild(o); }
+    for (const s of sets) { const o = document.createElement("option"); o.value = s; o.textContent = s.replace(/\.xlsx$/i, ""); o.selected = s === active; setSel.appendChild(o); }
   } else {
     const o = document.createElement("option"); o.value = ""; o.textContent = "(no sets — create one in the popup)"; setSel.appendChild(o);
   }
@@ -474,7 +438,6 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeCap
 chrome.runtime.onMessage.addListener((msg) => {
   if (!msg || msg.type !== "DV_READER_CMD" || !document.hasFocus()) return;
   if (msg.cmd === "capture") openCaptureCard(msg.text || currentSelectionText(), lastSel.rect || selectionRect());
-  else if (msg.cmd === "highlight") toggleHighlight();
 });
 
 main();

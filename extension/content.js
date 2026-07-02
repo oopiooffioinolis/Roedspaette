@@ -139,7 +139,7 @@
             <label for="dv-set">Save to set</label>
             <select id="dv-set">${
               sets.length
-                ? sets.map((s) => `<option ${s === active ? "selected" : ""}>${esc(s)}</option>`).join("")
+                ? sets.map((s) => `<option value="${esc(s)}" ${s === active ? "selected" : ""}>${esc(s.replace(/\.xlsx$/i, ""))}</option>`).join("")
                 : `<option value="">(no sets yet — create one in the popup)</option>`
             }</select>
           </div>

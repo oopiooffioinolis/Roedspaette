@@ -99,6 +99,22 @@
       Note: entry.note || "",
       Status: entry.status || "pending"
     };
+    // A moved card carries its spaced-repetition schedule with it.
+    if (entry.srs) {
+      const put = (s, suffix) => {
+        if (!s) return;
+        common["Due" + suffix] = s.due || "";
+        common["Interval" + suffix] = s.interval || 0;
+        common["Ease" + suffix] = s.ease || "";
+        common["Reps" + suffix] = s.reps || 0;
+        common["Lapses" + suffix] = s.lapses || 0;
+        if (s.stability) common["Stability" + suffix] = s.stability;
+        if (s.difficulty) common["Difficulty" + suffix] = s.difficulty;
+        if (s.lastReview) common["LastReview" + suffix] = s.lastReview;
+      };
+      put(entry.srs.da2en, "");
+      put(entry.srs.en2da, "_EN");
+    }
     if (entry.type === "word") {
       return Object.assign(common, {
         Term: entry.term || "",
@@ -298,6 +314,30 @@
     return null;
   }
 
+  /* Removes the row whose ID column matches, rebuilding the sheet so the
+     remaining rows reindex cleanly. Header row and hidden-column widths are kept.
+     Returns true if a row was removed. */
+  function deleteRowById(wb, sheetName, id) {
+    const ws = wb.Sheets[sheetName];
+    if (!ws || !id) return false;
+    const rows = rowsOf(ws);
+    if (rows.length < 2) return false;
+    const headers = rows[0].map(String);
+    const idCol = headers.indexOf("ID");
+    if (idCol < 0) return false;
+    const kept = [rows[0]];
+    let removed = false;
+    for (let r = 1; r < rows.length; r++) {
+      if (String(rows[r][idCol] || "") === String(id)) { removed = true; continue; }
+      kept.push(rows[r]);
+    }
+    if (!removed) return false;
+    const ns = XLSX.utils.aoa_to_sheet(kept);
+    ns["!cols"] = headers.map((h) => ({ wch: WIDTHS[h] || 14, hidden: HIDDEN.has(h) }));
+    wb.Sheets[sheetName] = ns;
+    return true;
+  }
+
   /* Expands a DDO inflection string into concrete lowercase word forms.
      "-en, -e, -ene" on "hund" -> hunden, hunde, hundene; full forms pass through. */
   function expandForms(term, lemma, inflections) {
@@ -393,6 +433,52 @@
     };
   }
 
+  /* ---------- set families (Name.xlsx, Name-2.xlsx, … read as one deck) ---------- */
+
+  // GitHub's contents API refuses to inline files over 1 MB, which used to brick a
+  // set. "Full" is therefore defined well under that: 880 KB. Warn at 95 % of full.
+  const SIZE_FULL = 880 * 1024;
+  const SIZE_WARN_RATIO = 0.95;
+
+  function b64Bytes(b64) {
+    return Math.floor(String(b64 || "").length * 3 / 4);
+  }
+
+  /* "Nyheder-2.xlsx" -> { base: "Nyheder", num: 2 }; "Nyheder.xlsx" -> num 1. */
+  function setFamily(fileName) {
+    const stem = String(fileName || "").replace(/\.xlsx$/i, "");
+    const m = stem.match(/^(.*)-(\d+)$/);
+    if (m && parseInt(m[2], 10) >= 2) return { base: m[1], num: parseInt(m[2], 10) };
+    return { base: stem, num: 1 };
+  }
+
+  function familyLabel(fileName) {
+    return setFamily(fileName).base;
+  }
+
+  /* File name for part `num` of a family: 1 -> Base.xlsx, n -> Base-n.xlsx. */
+  function familyFile(base, num) {
+    return num <= 1 ? base + ".xlsx" : base + "-" + num + ".xlsx";
+  }
+
+  /* Groups a contents listing ([{name, sha, size?}]) into ordered families:
+     [{ base, files: [{name, sha, size, num}…asc], latest }] sorted by label. */
+  function groupFamilies(files) {
+    const map = new Map();
+    for (const f of files || []) {
+      const fam = setFamily(f.name);
+      if (!map.has(fam.base)) map.set(fam.base, []);
+      map.get(fam.base).push(Object.assign({ num: fam.num }, f));
+    }
+    const out = [];
+    for (const [base, list] of map) {
+      list.sort((a, b) => a.num - b.num);
+      out.push({ base, files: list, latest: list[list.length - 1] });
+    }
+    out.sort((a, b) => a.base.localeCompare(b.base, "da"));
+    return out;
+  }
+
   function counts(wb) {
     const n = (name) => {
       const ws = wb.Sheets[name];
@@ -405,9 +491,10 @@
   return {
     SCHEMA_VERSION, WORD_HEADERS, PHRASE_HEADERS,
     newWorkbook, readWorkbook, writeWorkbook, appendEntry, counts,
-    ensureColumns, listPending, listChoices, updateRow,
+    ensureColumns, listPending, listChoices, updateRow, deleteRowById,
     listWords, updateRowById, expandForms,
     compoundSplits, isFormOf, compoundLemma,
-    decodeB64Utf8, inboxEntry
+    decodeB64Utf8, inboxEntry,
+    SIZE_FULL, SIZE_WARN_RATIO, b64Bytes, setFamily, familyLabel, familyFile, groupFamilies
   };
 });

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Rødspætte",
-  "version": "1.0.0",
-  "description": "Highlight Danish words and phrases on any page and save them into Excel vocab sets in your private GitHub repo \u2014 with ordnet.dk lookups, free on-device translation, and a known-words reader mode.",
+  "version": "1.1.0",
+  "description": "Save Danish words and phrases from any page or PDF into Excel vocab sets in your private GitHub repo \u2014 ordnet.dk lookups, free on-device translation, page highlighting, and automatic rollover to numbered files before GitHub's 1 MB limit.",
   "permissions": [
     "contextMenus",
     "storage",

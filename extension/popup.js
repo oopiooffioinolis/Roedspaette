@@ -1,38 +1,72 @@
 const send = (msg) => chrome.runtime.sendMessage(msg);
 const $ = (id) => document.getElementById(id);
+const VS = window.VocabSheets;
 
 function say(text, cls) { const m = $("msg"); m.textContent = text || ""; m.className = cls || ""; }
 
-function fillSets(sets, active) {
+let lastFiles = [];   // [{name, sha, size}] — for the capacity meter
+let sizeFull = 880 * 1024, warnRatio = 0.95;
+
+/* The select lists set FAMILIES (Nyheder + Nyheder-2 + … = one entry). */
+function fillSets(files, activeName) {
+  lastFiles = files || [];
+  const fams = VS.groupFamilies(lastFiles);
+  const activeBase = activeName ? VS.setFamily(activeName).base : "";
   const sel = $("set");
   sel.innerHTML = "";
-  for (const s of sets) {
+  for (const f of fams) {
     const o = document.createElement("option");
-    o.textContent = s;
-    o.selected = s === active;
+    o.value = f.latest.name;
+    o.textContent = f.base + (f.files.length > 1 ? ` · ${f.files.length} files` : "");
+    o.selected = f.base === activeBase;
     sel.appendChild(o);
   }
-  if (!sets.length) {
+  if (!fams.length) {
     const o = document.createElement("option");
     o.value = ""; o.textContent = "(no sets yet — create one below)";
     sel.appendChild(o);
   }
+  paintCapacity();
+}
+
+/* Meter for the selected family's newest file. */
+function paintCapacity() {
+  const box = $("cap");
+  const name = $("set").value;
+  if (!name) { box.style.display = "none"; return; }
+  const f = lastFiles.find((x) => x.name === name);
+  if (!f || !f.size) { box.style.display = "none"; return; }
+  const pct = Math.min(100, Math.round((f.size / sizeFull) * 100));
+  box.style.display = "block";
+  box.className = "cap" + (pct >= warnRatio * 100 ? " warn" : "");
+  $("capfill").style.width = pct + "%";
+  $("cappct").textContent = pct + " %";
+  const fam = VS.setFamily(name);
+  $("capnote").textContent = pct >= warnRatio * 100
+    ? `${name.replace(/\.xlsx$/i, "")} is nearly full — the next capture past full starts ${VS.familyFile(fam.base, fam.num + 1).replace(/\.xlsx$/i, "")} automatically. The deck stays one deck.`
+    : `${name.replace(/\.xlsx$/i, "")} — ${Math.round(f.size / 1024)} KB of ${Math.round(sizeFull / 1024)} KB.`;
+}
+
+function filesFrom(r) {
+  if (r.setFiles && r.setFiles.length) return r.setFiles;
+  return (r.sets || []).map((n) => ({ name: n, size: 0 }));
 }
 
 async function refresh(remote) {
   const st = await send({ type: "DV_GET_STATE" });
+  if (st.sizeFull) { sizeFull = st.sizeFull; warnRatio = st.warnRatio || warnRatio; }
   $("setup").style.display = st.configured ? "none" : "block";
   $("ready").style.display = st.configured ? "grid" : "none";
   $("openRepo").href = st.owner && st.repo ? `https://github.com/${st.owner}/${st.repo}` : "https://github.com";
-  if (!st.configured) { $("dot").className = "dot"; return; }
+  if (!st.configured) { $("dot").className = "eyes"; return; }
 
   if (remote) {
     say("Checking GitHub…");
     const r = await send({ type: "DV_REFRESH_SETS" });
-    if (r.error) { $("dot").className = "dot bad"; say("Couldn't reach the repo — check Options.", "bad"); fillSets(st.sets, st.activeSet); }
-    else { $("dot").className = "dot ok"; say(""); fillSets(r.sets, r.activeSet); }
+    if (r.error) { $("dot").className = "eyes bad"; say("Couldn't reach the repo — check Options.", "bad"); fillSets(filesFrom(st), st.activeSet); }
+    else { $("dot").className = "eyes ok"; say(""); fillSets(filesFrom(r), r.activeSet); }
   } else {
-    fillSets(st.sets, st.activeSet);
+    fillSets(filesFrom(st), st.activeSet);
   }
 
   const q = $("queue");
@@ -43,7 +77,7 @@ async function refresh(remote) {
 
   if (st.lastSaved) {
     const t = new Date(st.lastSaved.at);
-    $("last").textContent = `Last saved: “${st.lastSaved.term}” → ${st.lastSaved.set} at ${t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`;
+    $("last").textContent = `Last saved: “${st.lastSaved.term}” → ${String(st.lastSaved.set).replace(/\.xlsx$/i, "")} at ${t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`;
   }
   loadChoices();
   send({ type: "DV_GET_AUTO_HL" }).then((a) => paintHl(a && a.auto)).catch(() => {});
@@ -116,7 +150,8 @@ $("chSave").addEventListener("click", async () => {
 $("set").addEventListener("change", async (e) => {
   if (!e.target.value) return;
   await send({ type: "DV_SET_ACTIVE", set: e.target.value });
-  say(`Active set is now ${e.target.value}.`, "ok");
+  paintCapacity();
+  say(`Active set is now ${VS.familyLabel(e.target.value)}.`, "ok");
 });
 
 $("refresh").addEventListener("click", () => refresh(true));
@@ -128,8 +163,8 @@ $("create").addEventListener("click", async () => {
   const r = await send({ type: "DV_NEW_SET", name });
   if (r.error) { say(r.error, "bad"); return; }
   $("newName").value = "";
-  fillSets(r.sets, r.name);
-  say(`Created ${r.name}.`, "ok");
+  fillSets(filesFrom(r), r.name);
+  say(`Created ${VS.familyLabel(r.name)}.`, "ok");
 });
 
 $("retry").addEventListener("click", async () => {
