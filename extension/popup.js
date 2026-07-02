@@ -129,7 +129,7 @@ $("create").addEventListener("click", async () => {
   if (r.error) { say(r.error, "bad"); return; }
   $("newName").value = "";
   fillSets(r.sets, r.name);
-  say(`Created ${r.name} — it's now the active set.`, "ok");
+  say(`Created ${r.name}.`, "ok");
 });
 
 $("retry").addEventListener("click", async () => {
@@ -143,7 +143,7 @@ $("retry").addEventListener("click", async () => {
 function paintHl(auto) {
   const btn = $("hl");
   if (!btn) return;
-  btn.textContent = auto ? "✓ Highlighting known words — on" : "Highlight known words (stay on)";
+  btn.textContent = auto ? "✓ Highlighting — on" : "Highlight known words";
   btn.classList.toggle("primary", !!auto);
 }
 
@@ -161,7 +161,7 @@ $("hl").addEventListener("click", async () => {
     paintHl(true);
     if (r && r.error) say(r.error, "bad");
     else say(granted
-      ? `Highlighting on${r && r.count != null ? ` — ${r.count} here` : ""}. It stays on across pages until you turn it off.`
+      ? `Highlighting on${r && r.count != null ? ` — ${r.count} here` : ""}.`
       : "On for pages I can access. To cover every page automatically, allow access to all sites when Chrome asks.", "ok");
   } else {
     await send({ type: "DV_SET_AUTO_HL", on: false });

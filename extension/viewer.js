@@ -1,4 +1,4 @@
-/* Dansk Vokab — bundled PDF reader. Renders a PDF with PDF.js and runs the
+/* Rødspætte — bundled PDF reader. Renders a PDF with PDF.js and runs the
    known-words highlighter over its text layer (which Chrome's built-in viewer
    can't expose). Opened opt-in from the popup as viewer.html?file=<pdf url>. */
 import * as pdfjsLib from "./lib/pdfjs/pdf.mjs";
@@ -46,13 +46,13 @@ function loadBytes(url) {
 
 async function main() {
   if (!fileUrl) {
-    document.title = "Dansk Vokab reader";
-    $("title").textContent = "Dansk Vokab reader";
+    document.title = "Rødspætte reader";
+    $("title").textContent = "Rødspætte reader";
     showPicker("");
     return;
   }
   const name = fileName(fileUrl);
-  document.title = name + " — Dansk Vokab";
+  document.title = name + " — Rødspætte";
   $("title").textContent = name;
 
   // Local files: Chrome forbids an extension page from reading file:// URLs
@@ -97,7 +97,7 @@ async function openData(data, name, srcUrl) {
   $("error").hidden = true;
   $("pick").hidden = true;
   $("pages").hidden = false;
-  if (name) { document.title = name + " — Dansk Vokab"; $("title").textContent = name; }
+  if (name) { document.title = name + " — Rødspætte"; $("title").textContent = name; }
 
   state.doc = doc;
   const container = $("pages");
@@ -262,7 +262,7 @@ async function toggleHighlight() {
   state.hlOn = true;
   btn.classList.add("on");
   const count = highlightAll();
-  setStatus(`${count} known word${count === 1 ? "" : "s"} on rendered pages`);
+  setStatus(`${count} known word${count === 1 ? "" : "s"}`);
   // Persist the mode so it stays on for future PDFs and web pages. Best-effort
   // ask for all-sites access so web pages auto-highlight too (needs a gesture).
   try { await chrome.permissions.request({ origins: ["*://*/*"] }); } catch (_) {}
@@ -280,7 +280,7 @@ async function maybeAutoHighlight() {
     state.hlOn = true;
     $("hl").classList.add("on");
     highlightAll();
-    setStatus("known words highlighted");
+    setStatus("Highlighting on");
   } catch (_) {}
 }
 
@@ -435,7 +435,7 @@ async function saveCap() {
     snippet: "",
     note: $("cap-note").value.trim(),
     set: setVal || undefined,
-    sourceTitle: state.sourceTitle || document.title.replace(/ — Dansk Vokab$/, ""),
+    sourceTitle: state.sourceTitle || document.title.replace(/ — Rødspætte$/, ""),
     sourceURL: state.sourceURL || "",
     deepLink: "",
     dateAdded: new Date().toISOString().slice(0, 10)

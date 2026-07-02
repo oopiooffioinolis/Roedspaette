@@ -16,10 +16,7 @@ body {
   border-bottom: 1px solid #26251f;
   font-size: 13px;
 }
-#bar .flag { width: 16px; height: 12px; background: var(--brand); position: relative; border-radius: 2px; flex: none; }
-#bar .flag::before, #bar .flag::after { content: ""; position: absolute; background: #fff; }
-#bar .flag::before { left: 5px; top: 0; width: 2px; height: 100%; }
-#bar .flag::after { top: 5px; left: 0; height: 2px; width: 100%; }
+#bar .flag { width: 20px; height: auto; flex: none; display: block; }
 #title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #cfccc5; }
 #bar button {
   font-size: 12.5px; border-radius: 6px; padding: 6px 12px; cursor: pointer;
@@ -118,10 +115,7 @@ body {
   font-size: 13px;
 }
 #cap .cap-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-#cap .cap-flag { width: 16px; height: 12px; background: var(--brand); position: relative; border-radius: 2px; flex: none; }
-#cap .cap-flag::before, #cap .cap-flag::after { content: ""; position: absolute; background: #fff; }
-#cap .cap-flag::before { left: 5px; top: 0; width: 2px; height: 100%; }
-#cap .cap-flag::after { top: 5px; left: 0; height: 2px; width: 100%; }
+#cap .cap-flag { width: 20px; height: auto; flex: none; display: block; }
 #cap .cap-brand { flex: 1; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #8a857d; }
 #cap #cap-x { border: none; background: none; font-size: 14px; color: #a09a91; cursor: pointer; padding: 0 2px; }
 #cap label { font-size: 11px; color: #8a857d; display: block; margin: 8px 0 3px; }

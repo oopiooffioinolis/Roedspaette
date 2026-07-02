@@ -1,4 +1,4 @@
-/* Dansk Vokab — offscreen worker: HTML parsing + on-device translation. */
+/* Rødspætte — offscreen worker: HTML parsing + on-device translation. */
 "use strict";
 
 const translators = new Map(); // "da>en" -> translator instance

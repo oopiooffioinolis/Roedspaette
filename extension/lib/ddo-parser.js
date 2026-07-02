@@ -1,4 +1,4 @@
-/* Dansk Vokab — ordnet.dk (Den Danske Ordbog) page parser.
+/* Rødspætte — ordnet.dk (Den Danske Ordbog) page parser.
    Strategy: prefer stable text labels ("Bøjning", "Udtale") over CSS classes,
    with legacy-selector fast paths, so redesigns degrade gracefully. */
 (function (root, factory) {

@@ -1,4 +1,4 @@
-/* Dansk Vokab — workbook data layer.
+/* Rødspætte — workbook data layer.
    Runs in the extension service worker (importScripts) and in Node (tests). */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) {
@@ -26,7 +26,9 @@
   // Hidden in Excel: spaced-repetition bookkeeping + the JSON disambiguation blob.
   const HIDDEN = new Set([
     "Candidates", "Due", "Interval", "Ease", "Reps", "Lapses",
-    "Due_EN", "Interval_EN", "Ease_EN", "Reps_EN", "Lapses_EN"
+    "Due_EN", "Interval_EN", "Ease_EN", "Reps_EN", "Lapses_EN",
+    "Stability", "Difficulty", "LastReview",
+    "Stability_EN", "Difficulty_EN", "LastReview_EN"
   ]);
 
   const WIDTHS = {
@@ -54,7 +56,7 @@
     XLSX.utils.book_append_sheet(wb, sheetFromHeaders(PHRASE_HEADERS), "Phrases");
     const meta = XLSX.utils.aoa_to_sheet([
       ["SchemaVersion", SCHEMA_VERSION],
-      ["App", "Dansk Vokab"],
+      ["App", "Rødspætte"],
       ["SetName", setName || ""],
       ["Created", new Date().toISOString().slice(0, 10)]
     ]);

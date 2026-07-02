@@ -54,7 +54,7 @@ async function checkTranslator(verbose) {
   const target = ($("targetLang").value.trim() || "en").toLowerCase();
   try {
     const status = await t.availability({ sourceLanguage: "da", targetLanguage: target });
-    if (status === "available" || status === "readily") trSay(`ready — da → ${target} works on this computer. ✓`);
+    if (status === "available" || status === "readily") trSay(`ready — da → ${target} ✓`);
     else if (status === "downloadable" || status === "after-download") trSay(`da → ${target} is supported but the language pack isn't downloaded yet. Click the button to download it.`);
     else if (status === "downloading") trSay("language pack is downloading…");
     else trSay(`da → ${target} is not supported by the on-device translator. Try "en", or entries stay 'pending'.`);

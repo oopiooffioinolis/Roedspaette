@@ -1,4 +1,4 @@
-/* Dansk Vokab — background service worker (v0.4.1: iPhone inbox + auto-pilot; pending pass covers all sets). */
+/* Rødspætte — background service worker (v0.4.1: iPhone inbox + auto-pilot; pending pass covers all sets). */
 importScripts("lib/xlsx.full.min.js", "lib/vocab-sheets.js");
 
 const VS = self.VocabSheets;
@@ -505,7 +505,7 @@ async function processAll(cfg, activeSet, silent) {
     if (inbox.skipped) bits.push(`${inbox.skipped} skipped`);
     if (pend.updated) bits.push(`${pend.updated} pending entr${pend.updated > 1 ? "ies" : "y"} enriched`);
     if (pend.choose) bits.push(`${pend.choose} need${pend.choose > 1 ? "" : "s"} a sense picked — open the popup`);
-    if (bits.length) notify("Dansk Vokab", bits.join(" · "));
+    if (bits.length) notify("Rødspætte", bits.join(" · "));
   }
   return { inbox, pending: pend };
 }
@@ -698,8 +698,8 @@ async function startCapture(tab, fallbackText) {
   const text = (fallbackText || "").trim();
   if (isPdfTab(tab)) {
     if (text) await captureInBackground(tab, text);
-    else notify("Dansk Vokab",
-      "Select a word in the PDF, then right-click → “Save … to Danish vocab”. (The keyboard shortcut can’t read a PDF selection.)");
+    else notify("Rødspætte",
+      "Select a word in the PDF, then right-click → “Save … to Rødspætte”. (The keyboard shortcut can’t read a PDF selection.)");
     return;
   }
   const { activeSet, sets } = await getState();
@@ -713,12 +713,12 @@ async function startCapture(tab, fallbackText) {
     });
   } catch (e) {
     if (text) await captureInBackground(tab, text);
-    else notify("Dansk Vokab", "Can't capture on this page.");
+    else notify("Rødspætte", "Can't capture on this page.");
   }
 }
 
 function reportSave(res, term) {
-  if (res.error) notify("Dansk Vokab — not saved", res.error);
+  if (res.error) notify("Rødspætte — not saved", res.error);
   else if (res.duplicate) notify("Already in the set", `"${term}" was skipped — it's already in ${res.set}.`);
   else if (res.queued) notify("Saved offline", `"${term}" is queued and will retry (${res.reason}).`);
   else if (res.needsSetup) notify("Saved — translation needs setup", `"${term}" → ${res.set}. Open Options once to download the free Danish language pack.`);
@@ -793,7 +793,7 @@ async function resolveChoice(cfg, setName, id, choice) {
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({ id: MENU_ID, title: 'Save "%s" to Danish vocab', contexts: ["selection"] });
+    chrome.contextMenus.create({ id: MENU_ID, title: 'Save "%s" to Rødspætte', contexts: ["selection"] });
   });
   chrome.alarms.create("dv-auto", { periodInMinutes: 15, delayInMinutes: 1 });
   setBadge();
@@ -834,8 +834,8 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
     const on = !hlAuto;
     await setAutoHighlight(on);              // note: registers only if all-sites already granted
     const res = await applyHighlight(tab, on);
-    if (res && res.error) notify("Dansk Vokab", res.error);
-    else notify("Dansk Vokab", on ? "Highlighting known words (stays on across pages)." : "Highlighting turned off.");
+    if (res && res.error) notify("Rødspætte", res.error);
+    else notify("Rødspætte", on ? "Highlighting on." : "Highlighting off.");
   }
 });
 
