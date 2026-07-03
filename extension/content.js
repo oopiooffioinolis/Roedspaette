@@ -253,9 +253,9 @@
     if (HL.styleEl) return;
     HL.styleEl = document.createElement("style");
     HL.styleEl.textContent = `
-      .dv-known-word { background: rgba(200,16,46,.13); border-bottom: 2px solid rgba(200,16,46,.6);
-                       border-radius: 2px; cursor: pointer; }
-      .dv-known-word:hover { background: rgba(200,16,46,.28); }`;
+      .dv-known-word { background: rgba(138,35,24,.12); border-bottom: 2px solid rgba(138,35,24,.55);
+                       cursor: pointer; }
+      .dv-known-word:hover { background: rgba(138,35,24,.24); }`;
     document.documentElement.appendChild(HL.styleEl);
   }
 
@@ -412,24 +412,24 @@
     const showsTerm = !showsLemma && entry.term && entry.term.toLowerCase() !== form;
     shadow.innerHTML = `
       <style>
-        * { box-sizing: border-box; margin: 0; font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-        .box { width: 300px; background: #fff; color: #1c1c1c; border: 1px solid #e3e0db;
-               border-left: 4px solid #C8102E; border-radius: 9px; padding: 11px 13px 12px;
-               box-shadow: 0 8px 26px rgba(20,16,12,.2); }
+        * { box-sizing: border-box; margin: 0; font-family: "Familjen Grotesk", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        .box { width: 300px; background: #FBFAF8; color: #29241E; border: 1px solid #DAD5CC;
+               border-radius: 0; padding: 12px 14px 13px;
+               box-shadow: 7px 7px 0 rgba(41,36,30,.07); }
         .hd { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-        .x { border: none; background: none; font-size: 15px; line-height: 1; color: #a09a91; cursor: pointer; padding: 0 2px; flex: none; }
-        .x:hover { color: #4d483f; }
-        .word { font-size: 15px; font-weight: 700; }
-        .base { font-size: 12px; color: #8a857d; margin-left: 6px; font-weight: 400; }
-        input { width: 100%; margin-top: 8px; font-size: 13.5px; font-style: italic; color: #2a2722;
-                border: 1px solid transparent; border-bottom: 1px dashed #d8d4cd; border-radius: 4px;
-                padding: 4px 6px; background: #fff; cursor: text; }
-        input:hover { border-color: #d8d4cd; }
-        input:focus { outline: none; border: 1px solid #C8102E; font-style: normal; }
-        .meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px;
-                font-size: 10.5px; color: #a09a91; }
-        .status { font-size: 11.5px; margin-top: 5px; color: #6b665e; min-height: 13px; }
-        .status.bad { color: #C8102E; }
+        .x { border: none; background: none; font-size: 15px; line-height: 1; color: #8F877A; cursor: pointer; padding: 0 2px; flex: none; }
+        .x:hover { color: #29241E; }
+        .word { font-family: "EB Garamond", Georgia, serif; font-size: 17px; font-weight: 600; }
+        .base { font-size: 12px; color: #8F877A; margin-left: 6px; font-weight: 400; font-family: "Familjen Grotesk", sans-serif; }
+        input { width: 100%; margin-top: 9px; font-size: 13.5px; font-style: italic; color: #29241E;
+                border: 1px solid #C9C2B6; border-radius: 0;
+                padding: 6px 8px; background: #F4F3F0; cursor: text; }
+        input:hover { border-color: #8F877A; }
+        input:focus { outline: 2px solid #8A2318; outline-offset: 1px; border-color: #C9C2B6; font-style: normal; }
+        .meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 9px;
+                font-size: 10.5px; letter-spacing: .04em; color: #8F877A; }
+        .status { font-size: 11.5px; margin-top: 5px; color: #5C554A; min-height: 13px; }
+        .status.bad { color: #8A2318; }
       </style>
       <div class="box" role="dialog" aria-label="Translation">
         <div class="hd">
