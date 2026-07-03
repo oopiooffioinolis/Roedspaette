@@ -28,7 +28,14 @@ $("save").addEventListener("click", async () => {
 $("test").addEventListener("click", async () => {
   say("Testing…");
   await chrome.storage.local.set({ cfg: current() });
-  const r = await chrome.runtime.sendMessage({ type: "DV_TEST_CONN", cfg: current() });
+  let r;
+  try {
+    r = await chrome.runtime.sendMessage({ type: "DV_TEST_CONN", cfg: current() });
+  } catch (e) {
+    say("Background worker unreachable: " + (e.message || e) + " — try reloading the extension on chrome://extensions.", "bad");
+    return;
+  }
+  if (!r) { say("Background worker didn't reply — check chrome://extensions → Rødspætte → Errors, then reload the extension.", "bad"); return; }
   if (r.error) say(r.error, "bad");
   else say(r.note, "ok");
 });
