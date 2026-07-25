@@ -65,20 +65,51 @@
     return wb;
   }
 
+  /* Written verbatim as xl/theme/theme1.xml on every save (see WRITE_OPTS).
+     ASCII-only ON PURPOSE: SheetJS 0.18.5 keeps theme1.xml as Themes.raw and writes it
+     back byte-for-byte, but reads it as Latin-1 and writes it as UTF-8 — so every
+     non-ASCII character in a theme DOUBLES in size on each read/write cycle. The stock
+     theme carries CJK font names, which is how sets grew past 1 MB (GitHub's contents-API
+     limit, where a set reads back empty and gets wiped). No non-ASCII byte here means
+     nothing can double, no matter how many times a set is saved. */
+  const ASCII_THEME = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+    '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Office Theme"><a:themeElements>' +
+    '<a:clrScheme name="Office"><a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1><a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1>' +
+    '<a:dk2><a:srgbClr val="44546A"/></a:dk2><a:lt2><a:srgbClr val="E7E6E6"/></a:lt2>' +
+    '<a:accent1><a:srgbClr val="4472C4"/></a:accent1><a:accent2><a:srgbClr val="ED7D31"/></a:accent2><a:accent3><a:srgbClr val="A5A5A5"/></a:accent3>' +
+    '<a:accent4><a:srgbClr val="FFC000"/></a:accent4><a:accent5><a:srgbClr val="5B9BD5"/></a:accent5><a:accent6><a:srgbClr val="70AD47"/></a:accent6>' +
+    '<a:hlink><a:srgbClr val="0563C1"/></a:hlink><a:folHlink><a:srgbClr val="954F72"/></a:folHlink></a:clrScheme>' +
+    '<a:fontScheme name="Office">' +
+    '<a:majorFont><a:latin typeface="Calibri Light"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont>' +
+    '<a:minorFont><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont></a:fontScheme>' +
+    '<a:fmtScheme name="Office">' +
+    '<a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:fillStyleLst>' +
+    '<a:lnStyleLst>' +
+    '<a:ln w="6350" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="solid"/></a:ln>' +
+    '<a:ln w="12700" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="solid"/></a:ln>' +
+    '<a:ln w="19050" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="solid"/></a:ln>' +
+    '</a:lnStyleLst>' +
+    '<a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst>' +
+    '<a:bgFillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:bgFillStyleLst>' +
+    '</a:fmtScheme></a:themeElements><a:objectDefaults/><a:extraClrSchemeLst/></a:theme>';
+
+  /* The ONE set of write options for every .xlsx this app produces. Never call
+     XLSX.write directly — go through writeWorkbook, or a caller will miss these and
+     start growing files again (which is exactly what quiz-core.js used to do).
+     compression:true matters too: SheetJS defaults to compression:false, which STORES
+     every part uncompressed and makes each set ~2.5x bigger than it needs to be. */
+  const WRITE_OPTS = { type: "base64", bookType: "xlsx", compression: true, themeXLSX: ASCII_THEME };
+
   function readWorkbook(b64) {
     // cellStyles makes SheetJS parse !cols, so hidden SRS columns survive saves
     const wb = XLSX.read(b64, { type: "base64", cellStyles: true });
-    // Drop the parsed theme. A theme carried across read/write cycles can accumulate
-    // mis-encoded CJK font names that this build of SheetJS DOUBLES on every save,
-    // ballooning the file until it crosses GitHub's 1 MB contents-API limit (which then
-    // reads back as empty and wipes the set). SheetJS writes a clean default theme, so
-    // dropping the old one keeps the file small and stable.
+    // Free the incoming theme; WRITE_OPTS.themeXLSX replaces it on the way out anyway.
     if (wb && wb.Themes) delete wb.Themes;
     return wb;
   }
 
   function writeWorkbook(wb) {
-    return XLSX.write(wb, { type: "base64", bookType: "xlsx" });
+    return XLSX.write(wb, WRITE_OPTS);
   }
 
   function rowsOf(ws) {
@@ -490,7 +521,7 @@
 
   return {
     SCHEMA_VERSION, WORD_HEADERS, PHRASE_HEADERS,
-    newWorkbook, readWorkbook, writeWorkbook, appendEntry, counts,
+    newWorkbook, readWorkbook, writeWorkbook, WRITE_OPTS, appendEntry, counts,
     ensureColumns, listPending, listChoices, updateRow, deleteRowById,
     listWords, updateRowById, expandForms,
     compoundSplits, isFormOf, compoundLemma,
