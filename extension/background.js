@@ -581,6 +581,12 @@ async function autoProcess() {
 
 /* ---------- known-words highlight index ---------- */
 
+/* Bumped whenever the shape of a cached row changes. Without it, buildHighlightIndex
+   would keep serving rows cached under the old shape forever: the GitHub sha is
+   unchanged by an extension update, so the freshness check never fires and the new
+   columns would silently stay empty. */
+const HL_CACHE_V = 2;
+
 async function buildHighlightIndex(cfg) {
   const files = await listSetFiles(cfg);
   const { hlCache } = await chrome.storage.local.get({ hlCache: {} });
@@ -588,7 +594,7 @@ async function buildHighlightIndex(cfg) {
   const map = {};
   for (const f of files) {
     let rec = hlCache[f.name];
-    if (!rec || rec.sha !== f.sha) {
+    if (!rec || rec.sha !== f.sha || rec.v !== HL_CACHE_V) {
       let file;
       try {
         file = await getFile(cfg, f.name);
@@ -599,14 +605,15 @@ async function buildHighlightIndex(cfg) {
         continue;
       }
       if (!file) continue;
-      rec = { sha: f.sha, words: VS.listWords(VS.readWorkbook(file.b64)) };
+      rec = { v: HL_CACHE_V, sha: f.sha, words: VS.listWords(VS.readWorkbook(file.b64)) };
     }
     newCache[f.name] = rec;
     for (const w of rec.words) {
       for (const form of VS.expandForms(w.term, w.lemma, w.inflections)) {
         const existing = map[form];
         if (!existing || (!existing.t && w.translation)) {
-          map[form] = { t: w.translation || "", term: w.term, lemma: w.lemma || "", set: f.name, id: w.id || "" };
+          map[form] = { t: w.translation || "", term: w.term, lemma: w.lemma || "", set: f.name,
+                        id: w.id || "", ipa: w.ipa || "", audio: w.audioURL || "" };
         }
       }
     }
@@ -626,12 +633,12 @@ const HL_WORDS_TTL = 5 * 60 * 1000;
 async function getHighlightWords(cfg) {
   try {
     const { hlWords } = await chrome.storage.session.get({ hlWords: null });
-    if (hlWords && Date.now() - hlWords.at < HL_WORDS_TTL) return hlWords.map;
+    if (hlWords && hlWords.v === HL_CACHE_V && Date.now() - hlWords.at < HL_WORDS_TTL) return hlWords.map;
   } catch (_) {}
   if (hlInflight) return hlInflight;
   hlInflight = (async () => {
     const map = await buildHighlightIndex(cfg);
-    try { await chrome.storage.session.set({ hlWords: { at: Date.now(), map } }); } catch (_) {}
+    try { await chrome.storage.session.set({ hlWords: { v: HL_CACHE_V, at: Date.now(), map } }); } catch (_) {}
     return map;
   })();
   try { return await hlInflight; } finally { hlInflight = null; }

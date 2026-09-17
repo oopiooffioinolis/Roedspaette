@@ -20,10 +20,111 @@
     return null;
   }
 
+  const flat = (s) => String(s || "").replace(/\s+/g, " ").trim();
+
+  /* Text of an element, walking nodes ourselves. innerText is unreliable inside a
+     Colibrio surface — it can return "" or whitespace-only even when the text is on
+     screen — and collectTextNodes is no use here because it deliberately skips our own
+     highlight spans, which would drop the very words we're capturing. */
+  function scopeText(scope) {
+    if (!scope) return "";
+    const skip = /^(SCRIPT|STYLE|NOSCRIPT|TEXTAREA|SELECT|OPTION)$/;
+    const w = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => (n.parentElement && !skip.test(n.parentElement.tagName)
+        ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT)
+    });
+    let out = "", n;
+    while ((n = w.nextNode())) out += n.nodeValue;
+    return flat(out);
+  }
+
+  /* Colibrio splits a paragraph across page surfaces and marks the halves with
+     data-colibrio-fragmented-at-start / -at-end. The marker sits on a wrapper, not on
+     the <p>, so climb to find it. */
+  function fragmentedAncestor(el) {
+    let n = el;
+    while (n && n.nodeType === 1) {
+      if (n.hasAttribute("data-colibrio-fragmented-at-start") ||
+          n.hasAttribute("data-colibrio-fragmented-at-end")) return n;
+      n = n.parentElement;
+    }
+    return null;
+  }
+
+  /* Every same-origin document in the tab, reader frames included. */
+  function siblingDocs() {
+    const out = [];
+    const visit = (w) => {
+      let n = 0;
+      try { n = w.frames.length; } catch (_) { return; }
+      for (let i = 0; i < n; i++) {
+        try { out.push(w.frames[i].document); } catch (_) { continue; }
+        visit(w.frames[i]);
+      }
+    };
+    try { visit(window.top); } catch (_) {}
+    return out;
+  }
+
+  /* Grows a hit out to sentence boundaries, capped so we never lift a whole page. */
+  function sentenceAround(text, at, len, cap) {
+    const max = cap || 240;
+    const lo = Math.max(0, at - max);
+    const hi = Math.min(text.length, at + len + max);
+    let s = at, e = at + len;
+    for (let i = at - 1; i >= lo; i--) {
+      if (/[.!?…]/.test(text[i]) && /\s/.test(text[i + 1] || " ")) { s = i + 1; break; }
+      s = i;
+    }
+    for (let i = at + len; i < hi; i++) {
+      e = i + 1;
+      if (/[.!?…]/.test(text[i])) break;
+    }
+    return text.slice(s, e).trim();
+  }
+
+  /* Our own fragment is cut, but the surfaces cut at different points and one of the
+     others may hold the sentence whole. Anchor on the text we do have (the term plus
+     what surrounds it) and look for that exact run in the sibling frames — if it
+     matches, we are demonstrably in the right place, so no page ordering is needed. */
+  function completeFromFrames(local, term) {
+    const i = local.indexOf(term);
+    if (i < 0 || !document.body) return local;
+    const anchor = flat(local.slice(Math.max(0, i - 25), Math.min(local.length, i + term.length + 25)));
+    if (anchor.length < term.length + 8) return local; // too weak to identify a spot
+    const chapter = document.body.id;
+    let best = local;
+    for (const d of siblingDocs()) {
+      if (d === document || !d.body) continue;
+      if (chapter && d.body.id !== chapter) continue;
+      const hay = flat(d.body.textContent);
+      const at = hay.indexOf(anchor);
+      if (at < 0) continue;
+      const cand = sentenceAround(hay, at, anchor.length);
+      if (cand.length > best.length) best = cand;
+    }
+    return best;
+  }
+
+  /* No usable range — keyboard shortcut, or the reader dropped the selection before
+     the message arrived. Find the term in this document and take its sentence. */
+  function snippetFromDocument(term) {
+    if (!document.body || !term) return "";
+    const hay = scopeText(document.body);
+    const at = hay.indexOf(term);
+    return at < 0 ? "" : sentenceAround(hay, at, term.length);
+  }
+
   function paragraphAround(sel, text) {
     const block = closestBlock(sel.anchorNode) || closestBlock(sel.focusNode);
-    let para = (block ? block.innerText : "").replace(/\s+/g, " ").trim();
+    let para = scopeText(block);
     if (!para) return "";
+    if (block && fragmentedAncestor(block)) {
+      const better = completeFromFrames(para, text);
+      if (better.length > para.length) para = better;
+      // Couldn't complete it — say so rather than hand over half a sentence silently.
+      else if (!/[.!?…"”»)]$/.test(para)) para += " …";
+    }
     if (para.length > 480) {
       const i = para.indexOf(text);
       if (i >= 0) {
@@ -37,8 +138,30 @@
     return para;
   }
 
+  /* Inside a reader frame location.href is a blob: URL generated per session — it is
+     dead the moment the tab closes, and #:~:text= does not apply to it either. Fall
+     back to the top document's URL and title, keeping the chapter id as the locator. */
+  function pageIdentity() {
+    const inFrame = window !== window.top;
+    const chapter = inFrame && document.body ? (document.body.id || "") : "";
+    let url = location.href.split("#")[0];
+    let title = document.title || "";
+    if (/^(blob|data|about):/i.test(url) || !title) {
+      const ctx = topCtx();
+      if (ctx) {
+        url = ctx.win.location.href.split("#")[0];
+        title = ctx.doc.title || title;
+      }
+    }
+    if (chapter) title = title ? `${title} · ${chapter}` : chapter;
+    return { url, title, chapter };
+  }
+
   function deepLink(text) {
-    const base = location.href.split("#")[0];
+    const base = pageIdentity().url;
+    // A text fragment can't address content the reader paints from a blob, so don't
+    // append one that will silently fail.
+    if (window !== window.top) return base;
     let frag = text.trim().replace(/\s+/g, " ");
     if (frag.length > 80) {
       frag = frag.slice(0, 80);
@@ -75,7 +198,9 @@
     const text = raw.replace(/\s+/g, " ").trim();
     if (!text) return { error: "no-selection" };
 
-    const snippet = sel && sel.rangeCount ? paragraphAround(sel, text) : "";
+    let snippet = sel && sel.rangeCount ? paragraphAround(sel, text) : "";
+    if (!snippet) snippet = snippetFromDocument(text);
+    const ident = pageIdentity();
     const link = deepLink(text);
     let rect = { bottom: 80, left: 40 };
     try { rect = sel.getRangeAt(0).getBoundingClientRect(); } catch (_) {}
@@ -161,7 +286,7 @@
           <button class="cancel" id="dv-cancel">Cancel</button>
           <button class="save" id="dv-save">Save</button>
         </div>
-        <div class="src" title="${esc(location.href)}">${esc(document.title || location.hostname)}</div>
+        <div class="src" title="${esc(ident.url)}">${esc(ident.title || location.hostname)}</div>
       </div>`;
 
     ctx.doc.documentElement.appendChild(host);
@@ -220,8 +345,8 @@
         snippet: $("#dv-snippet").value.trim(),
         note: $("#dv-note").value.trim(),
         set: setSel || undefined,
-        sourceTitle: document.title || "",
-        sourceURL: location.href.split("#")[0],
+        sourceTitle: ident.title,
+        sourceURL: ident.url,
         deepLink: link,
         dateAdded: new Date().toISOString().slice(0, 10)
       };
@@ -268,6 +393,20 @@
   const HL_NAME = "dv-known";
 
   let trBox = null;
+  let sayAudio = null;
+
+  /* ordnet.dk's mp3s. The reader page sets no CSP, so a plain Audio element from here
+     reaches the network; if a future page does restrict media-src, the error handler
+     below is what surfaces it instead of failing silently. */
+  function say(url, onState) {
+    try { if (sayAudio) { sayAudio.pause(); sayAudio = null; } } catch (_) {}
+    if (!url) return;
+    const a = new Audio(url);
+    sayAudio = a;
+    a.addEventListener("ended", () => onState && onState(""));
+    a.addEventListener("error", () => onState && onState("couldn't play the audio"));
+    a.play().then(() => onState && onState("playing…")).catch(() => onState && onState("couldn't play the audio"));
+  }
 
   /* Popups go in the TOP document when we're in a frame: a Colibrio page surface is
      often half the window wide, so a 344px card anchored inside it gets clipped.
@@ -561,6 +700,7 @@
   /* ---- the persistent translation box (Enter saves & closes, Esc closes) ---- */
 
   function closeTrBox() {
+    try { if (sayAudio) { sayAudio.pause(); sayAudio = null; } } catch (_) {}
     if (trBox) { trBox.remove(); trBox = null; }
   }
 
@@ -588,6 +728,11 @@
         .x:hover { color: #29241E; }
         .word { font-family: "EB Garamond", Georgia, serif; font-size: 17px; font-weight: 600; }
         .base { font-size: 12px; color: #8F877A; margin-left: 6px; font-weight: 400; font-family: "Familjen Grotesk", sans-serif; }
+        .pron { display: flex; align-items: center; gap: 7px; margin-top: 3px; }
+        .ipa { font-size: 12.5px; color: #5C554A; font-family: "Familjen Grotesk", sans-serif; }
+        .say { border: 1px solid #C9C2B6; background: #F4F3F0; color: #8A2318; cursor: pointer;
+               font-size: 11px; line-height: 1; padding: 3px 7px; border-radius: 0; }
+        .say:hover { border-color: #8A2318; }
         input { width: 100%; margin-top: 9px; font-size: 13.5px; font-style: italic; color: #29241E;
                 border: 1px solid #C9C2B6; border-radius: 0;
                 padding: 6px 8px; background: #F4F3F0; cursor: text; }
@@ -603,6 +748,10 @@
           <div class="word">${esc(displayText || form)}${showsLemma ? `<span class="base">→ ${esc(entry.lemma)}</span>` : showsTerm ? `<span class="base">→ ${esc(entry.term)}</span>` : ""}</div>
           <button class="x" id="dv-hl-x" title="Close" aria-label="Close">✕</button>
         </div>
+        ${entry.ipa || entry.audio ? `<div class="pron">
+          ${entry.ipa ? `<span class="ipa">${esc(entry.ipa)}</span>` : ""}
+          ${entry.audio ? `<button class="say" id="dv-hl-say" title="Play pronunciation">▶ udtale</button>` : ""}
+        </div>` : ""}
         <input id="dv-hl-tr" type="text" value="${esc(entry.t || "")}" placeholder="add a translation…">
         <div class="status" id="dv-hl-status"></div>
         <div class="meta"><span>${esc(entry.set)}</span><span>Enter saves · Esc closes</span></div>
@@ -612,6 +761,12 @@
     const input = shadow.querySelector("#dv-hl-tr");
     const status = shadow.querySelector("#dv-hl-status");
     shadow.querySelector("#dv-hl-x").addEventListener("click", closeTrBox);
+    const sayBtn = shadow.querySelector("#dv-hl-say");
+    if (sayBtn) {
+      sayBtn.addEventListener("click", () => {
+        say(entry.audio, (m) => { if (trBox) status.textContent = m; });
+      });
+    }
 
     if (!entry.t) {
       input.placeholder = "translating…";

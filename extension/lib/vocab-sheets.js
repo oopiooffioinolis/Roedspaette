@@ -310,7 +310,8 @@
     if (rows.length < 2) return [];
     const h = rows[0].map(String);
     const col = (n) => h.indexOf(n);
-    const c = { id: col("ID"), term: col("Term"), lemma: col("Lemma"), infl: col("Inflections"), tr: col("Translation") };
+    const c = { id: col("ID"), term: col("Term"), lemma: col("Lemma"), infl: col("Inflections"),
+                tr: col("Translation"), ipa: col("IPA"), audio: col("AudioURL") };
     const out = [];
     for (let r = 1; r < rows.length; r++) {
       const term = c.term >= 0 ? String(rows[r][c.term] || "").trim() : "";
@@ -320,7 +321,9 @@
         term,
         lemma: c.lemma >= 0 ? String(rows[r][c.lemma] || "").trim() : "",
         inflections: c.infl >= 0 ? String(rows[r][c.infl] || "").trim() : "",
-        translation: c.tr >= 0 ? String(rows[r][c.tr] || "").trim() : ""
+        translation: c.tr >= 0 ? String(rows[r][c.tr] || "").trim() : "",
+        ipa: c.ipa >= 0 ? String(rows[r][c.ipa] || "").trim() : "",
+        audioURL: c.audio >= 0 ? String(rows[r][c.audio] || "").trim() : ""
       });
     }
     return out;
