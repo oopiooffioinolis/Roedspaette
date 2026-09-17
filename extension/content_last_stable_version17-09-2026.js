@@ -7,7 +7,6 @@
     "DIV", "H1", "H2", "H3", "H4", "H5", "H6", "DD", "DT", "FIGCAPTION", "PRE", "MAIN", "ASIDE"]);
 
   let host = null;
-  let cardCtx = null;
 
   const send = (msg) => chrome.runtime.sendMessage(msg);
 
@@ -56,10 +55,6 @@
   function removeCard() {
     if (host) { host.remove(); host = null; }
     document.removeEventListener("keydown", onKey, true);
-    if (cardCtx && cardCtx.doc !== document) {
-      try { cardCtx.doc.removeEventListener("keydown", onKey, true); } catch (_) {}
-    }
-    cardCtx = null;
   }
 
   function onKey(e) {
@@ -84,9 +79,7 @@
     const active = msg.activeSet || sets[0] || "";
     const isWord = text.split(/\s+/).length === 1;
 
-    const ctx = topCtx() || { win: window, doc: document, dx: 0, dy: 0 };
-    cardCtx = ctx;
-    host = ctx.doc.createElement("div");
+    host = document.createElement("div");
     host.style.cssText = "all:initial; position:fixed; z-index:2147483647;";
     const shadow = host.attachShadow({ mode: "closed" });
     shadow.innerHTML = `
@@ -164,14 +157,13 @@
         <div class="src" title="${esc(location.href)}">${esc(document.title || location.hostname)}</div>
       </div>`;
 
-    ctx.doc.documentElement.appendChild(host);
+    document.documentElement.appendChild(host);
     const card = shadow.querySelector(".card");
-    const top = Math.min(Math.max(8, rect.bottom + ctx.dy + 10), ctx.win.innerHeight - card.offsetHeight - 12);
-    const left = Math.min(Math.max(8, rect.left + ctx.dx), ctx.win.innerWidth - 360);
+    const top = Math.min(Math.max(8, rect.bottom + 10), window.innerHeight - card.offsetHeight - 12);
+    const left = Math.min(Math.max(8, rect.left), window.innerWidth - 360);
     host.style.top = `${top}px`;
     host.style.left = `${left}px`;
     document.addEventListener("keydown", onKey, true);
-    if (ctx.doc !== document) ctx.doc.addEventListener("keydown", onKey, true);
 
     let type = isWord ? "word" : "phrase";
     const $ = (q) => shadow.querySelector(q);
@@ -252,54 +244,15 @@
 
   /* ====================== known-words highlighter ====================== */
 
-  const HL = { on: false, map: null, spans: [], ranges: [], hl: null, styleEl: null,
-               clickBound: false, observer: null, pending: new Set(), flushTimer: null, count: 0 };
-  const MAX_MARKS = 8000; // global cap across the whole (possibly infinite-scroll) page
-
-  /* Reader frames — Colibrio (eReolen/Publizon) and anything else that paginates an
-     EPUB inside an iframe — own their DOM, rebuild it on every page turn, and measure
-     it to decide where to break pages. Injecting <span> there perturbs the layout
-     engine whose output we're annotating, and gets wiped each turn anyway. The CSS
-     Custom Highlight API paints Ranges with no DOM mutation at all, so we use it
-     whenever we're inside a frame and it's available, and keep the original span path
-     for ordinary pages, where :hover and cursor styling are worth having. */
-  const RANGE_MODE = window !== window.top
-    && typeof CSS !== "undefined" && !!CSS.highlights && typeof Highlight === "function";
-  const HL_NAME = "dv-known";
-
+  const HL = { on: false, map: null, spans: [], styleEl: null, clickBound: false,
+               observer: null, pending: new Set(), flushTimer: null, count: 0 };
+  const MAX_SPANS = 8000; // global cap across the whole (possibly infinite-scroll) page
   let trBox = null;
-
-  /* Popups go in the TOP document when we're in a frame: a Colibrio page surface is
-     often half the window wide, so a 344px card anchored inside it gets clipped.
-     dx/dy convert this frame's viewport coordinates into the top document's.
-     Returns null if any ancestor is cross-origin, in which case we stay local. */
-  function topCtx() {
-    if (window === window.top) return { win: window, doc: document, dx: 0, dy: 0 };
-    try {
-      let w = window, dx = 0, dy = 0;
-      while (w !== w.top) {
-        const fe = w.frameElement;
-        if (!fe) return null;
-        const r = fe.getBoundingClientRect();
-        dx += r.left; dy += r.top;
-        w = w.parent;
-      }
-      void w.document.documentElement; // throws if cross-origin
-      return { win: w, doc: w.document, dx, dy };
-    } catch (_) { return null; }
-  }
 
   function injectHlStyle() {
     if (HL.styleEl) return;
     HL.styleEl = document.createElement("style");
-    /* ::highlight() only honours colour, background-colour, text-decoration and
-       text-shadow — no cursor, no :hover. That's the trade for not touching the DOM. */
-    HL.styleEl.textContent = RANGE_MODE
-      ? `::highlight(${HL_NAME}) {
-           background-color: rgba(138,35,24,.16);
-           text-decoration: underline 2px rgba(138,35,24,.55);
-         }`
-      : `
+    HL.styleEl.textContent = `
       .dv-known-word { background: rgba(138,35,24,.12); border-bottom: 2px solid rgba(138,35,24,.55);
                        cursor: pointer; }
       .dv-known-word:hover { background: rgba(138,35,24,.24); }`;
@@ -327,12 +280,12 @@
   }
 
   function wrapMatches(root) {
-    if (HL.count >= MAX_MARKS) return 0;
+    if (HL.count >= MAX_SPANS) return 0;
     const nodes = collectTextNodes(root);
     const re = /\p{L}+/gu;
     let count = 0;
     for (const node of nodes) {
-      if (HL.count >= MAX_MARKS) break;
+      if (HL.count >= MAX_SPANS) break;
       const text = node.nodeValue;
       let m, last = 0, frag = null;
       re.lastIndex = 0;
@@ -349,7 +302,7 @@
         HL.spans.push(s);
         last = m.index + m[0].length;
         count++;
-        if (++HL.count >= MAX_MARKS) break;
+        if (++HL.count >= MAX_SPANS) break;
       }
       if (frag) {
         if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
@@ -358,82 +311,6 @@
     }
     return count;
   }
-
-  /* ---- range mode: flatten each block, match, paint ---- */
-
-  /* Groups text nodes by nearest block so an inline run reads as one string.
-     InDesign-exported EPUBs (eReolen's are) wrap style changes in
-     <span class="CharOverride-N">, which splits words across sibling nodes —
-     "ud" + "elukket". Matching per text node misses those silently; matching the
-     block's flattened text catches them, and the piece map turns the match back
-     into a Range spanning both nodes. */
-  function blockRuns(nodes) {
-    const runs = [];
-    let cur = null, curBlock = null;
-    for (const n of nodes) {
-      const b = closestBlock(n) || n.parentElement;
-      if (!cur || b !== curBlock) { cur = { pieces: [], text: "" }; runs.push(cur); curBlock = b; }
-      cur.pieces.push({ node: n, start: cur.text.length });
-      cur.text += n.nodeValue;
-    }
-    return runs;
-  }
-
-  function pieceAt(pieces, index) {
-    let lo = 0, hi = pieces.length - 1, best = 0;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      if (pieces[mid].start <= index) { best = mid; lo = mid + 1; } else hi = mid - 1;
-    }
-    return pieces[best];
-  }
-
-  function rangeFor(run, from, to) {
-    const a = pieceAt(run.pieces, from);
-    const b = pieceAt(run.pieces, to - 1);
-    const r = document.createRange();
-    r.setStart(a.node, from - a.start);
-    r.setEnd(b.node, to - b.start);
-    return r;
-  }
-
-  function paintRanges() {
-    try {
-      HL.hl = new Highlight(...HL.ranges);
-      CSS.highlights.set(HL_NAME, HL.hl);
-    } catch (_) {}
-  }
-
-  /* Colibrio tears down and rebuilds page surfaces constantly; ranges into detached
-     nodes never render but would accumulate forever. */
-  function pruneRanges() {
-    const live = HL.ranges.filter((r) => r.startContainer && r.startContainer.isConnected);
-    if (live.length === HL.ranges.length) return;
-    HL.ranges = live;
-    HL.count = live.length;
-    paintRanges();
-  }
-
-  function markRanges(root) {
-    if (HL.count >= MAX_MARKS) return 0;
-    const re = /\p{L}+/gu;
-    let count = 0;
-    for (const run of blockRuns(collectTextNodes(root))) {
-      if (HL.count >= MAX_MARKS) break;
-      re.lastIndex = 0;
-      let m;
-      while ((m = re.exec(run.text))) {
-        if (!HL.map.has(m[0].toLowerCase())) continue;
-        HL.ranges.push(rangeFor(run, m.index, m.index + m[0].length));
-        count++;
-        if (++HL.count >= MAX_MARKS) break;
-      }
-    }
-    if (count) paintRanges();
-    return count;
-  }
-
-  const markMatches = (root) => (RANGE_MODE ? markRanges(root) : wrapMatches(root));
 
   /* Keep highlighting content that arrives after load (infinite scroll, SPA
      route changes). We disconnect while writing our own spans so we never
@@ -467,8 +344,7 @@
     const roots = [...HL.pending];
     HL.pending.clear();
     if (HL.observer) HL.observer.disconnect();
-    if (RANGE_MODE) pruneRanges();
-    for (const r of roots) { if (r.isConnected) markMatches(r); }
+    for (const r of roots) { if (r.isConnected) wrapMatches(r); }
     if (HL.on && HL.observer) HL.observer.observe(document.body, { childList: true, subtree: true });
   }
   function stopObserver() {
@@ -477,63 +353,22 @@
     HL.pending.clear();
   }
 
-  /* Range mode paints no elements, so we locate the caret under the pointer and
-     expand it to a word across the block's flattened text — the same flattening the
-     highlighter uses, so a word split across CharOverride spans still resolves. */
-  function wordAtPoint(x, y) {
-    let caret = null;
-    if (document.caretRangeFromPoint) {
-      caret = document.caretRangeFromPoint(x, y);
-    } else if (document.caretPositionFromPoint) {
-      const p = document.caretPositionFromPoint(x, y);
-      if (p) { caret = document.createRange(); caret.setStart(p.offsetNode, p.offset); }
-    }
-    if (!caret || !caret.startContainer || caret.startContainer.nodeType !== 3) return null;
-    const node = caret.startContainer;
-    const scope = closestBlock(node) || node.parentElement;
-    if (!scope) return null;
-    for (const run of blockRuns(collectTextNodes(scope))) {
-      const piece = run.pieces.find((p) => p.node === node);
-      if (!piece) continue;
-      const at = piece.start + caret.startOffset;
-      const re = /\p{L}+/gu;
-      let m;
-      while ((m = re.exec(run.text))) {
-        const from = m.index, to = m.index + m[0].length;
-        if (from <= at && at <= to) return { form: m[0].toLowerCase(), text: m[0], range: rangeFor(run, from, to) };
-        if (from > at) break;
-      }
-      return null;
-    }
-    return null;
-  }
-
   function onHlClick(e) {
     if (!HL.on) return;
-    if (RANGE_MODE) {
-      const hit = wordAtPoint(e.clientX, e.clientY);
-      if (!hit || !HL.map || !HL.map.has(hit.form)) return;
-      e.preventDefault();
-      e.stopPropagation();
-      openTrBox(hit.form, hit.range.getBoundingClientRect(), hit.text);
-      return;
-    }
     const path = e.composedPath ? e.composedPath() : [e.target];
     const hit = path.find((el) => el && el.classList && el.classList.contains("dv-known-word"));
     if (!hit) return;
     e.preventDefault();
     e.stopPropagation();
-    openTrBox(hit.dataset.dvForm, hit.getBoundingClientRect(), hit.textContent);
+    openTrBox(hit);
   }
 
   function hlOn(words) {
-    if (HL.on) return RANGE_MODE ? HL.ranges.length : HL.spans.length;
-    if (words) HL.map = new Map(Object.entries(words));
-    if (!HL.map || !document.body) return 0;
+    if (HL.on) return HL.spans.length;
+    HL.map = new Map(Object.entries(words || {}));
     HL.count = 0;
-    HL.ranges = [];
     injectHlStyle();
-    const count = markMatches(document.body);
+    const count = wrapMatches(document.body);
     HL.on = true;
     startObserver();
     if (!HL.clickBound) {
@@ -550,9 +385,6 @@
       if (s.isConnected) s.replaceWith(document.createTextNode(s.textContent));
     }
     HL.spans = [];
-    HL.ranges = [];
-    HL.hl = null;
-    try { if (RANGE_MODE && CSS.highlights) CSS.highlights.delete(HL_NAME); } catch (_) {}
     HL.on = false;
     HL.count = 0;
     if (HL.styleEl) { HL.styleEl.remove(); HL.styleEl = null; }
@@ -564,16 +396,17 @@
     if (trBox) { trBox.remove(); trBox = null; }
   }
 
-  function openTrBox(form, rect, displayText) {
+  function openTrBox(span) {
     closeTrBox();
-    const entry = form && HL.map ? HL.map.get(form) : null;
+    const form = span.dataset.dvForm;
+    const entry = HL.map.get(form);
     if (!entry) return;
-    const ctx = topCtx() || { win: window, doc: document, dx: 0, dy: 0 };
+    const rect = span.getBoundingClientRect();
 
-    trBox = ctx.doc.createElement("div");
+    trBox = document.createElement("div");
     trBox.style.cssText = "all:initial; position:absolute; z-index:2147483647;";
-    trBox.style.top = `${rect.bottom + ctx.dy + ctx.win.scrollY + 6}px`;
-    trBox.style.left = `${Math.min(Math.max(8, rect.left + ctx.dx + ctx.win.scrollX), ctx.win.scrollX + Math.max(8, ctx.win.innerWidth - 312))}px`;
+    trBox.style.top = `${rect.bottom + window.scrollY + 6}px`;
+    trBox.style.left = `${Math.min(Math.max(8, rect.left + window.scrollX), window.scrollX + Math.max(8, window.innerWidth - 312))}px`;
     const shadow = trBox.attachShadow({ mode: "closed" });
     const showsLemma = entry.lemma && entry.lemma.toLowerCase() !== form;
     const showsTerm = !showsLemma && entry.term && entry.term.toLowerCase() !== form;
@@ -600,14 +433,14 @@
       </style>
       <div class="box" role="dialog" aria-label="Translation">
         <div class="hd">
-          <div class="word">${esc(displayText || form)}${showsLemma ? `<span class="base">→ ${esc(entry.lemma)}</span>` : showsTerm ? `<span class="base">→ ${esc(entry.term)}</span>` : ""}</div>
+          <div class="word">${esc(span.textContent)}${showsLemma ? `<span class="base">→ ${esc(entry.lemma)}</span>` : showsTerm ? `<span class="base">→ ${esc(entry.term)}</span>` : ""}</div>
           <button class="x" id="dv-hl-x" title="Close" aria-label="Close">✕</button>
         </div>
         <input id="dv-hl-tr" type="text" value="${esc(entry.t || "")}" placeholder="add a translation…">
         <div class="status" id="dv-hl-status"></div>
         <div class="meta"><span>${esc(entry.set)}</span><span>Enter saves · Esc closes</span></div>
       </div>`;
-    ctx.doc.documentElement.appendChild(trBox);
+    document.documentElement.appendChild(trBox);
 
     const input = shadow.querySelector("#dv-hl-tr");
     const status = shadow.querySelector("#dv-hl-status");
@@ -659,24 +492,8 @@
 
   /* ====================== messaging ====================== */
 
-  /* The service worker drives highlighting through executeScript({allFrames:true}),
-     which runs in this same isolated world and returns one result per frame — so it
-     can sum real per-frame counts. tabs.sendMessage cannot: it delivers everywhere
-     but hands back only the first reply. */
-  window.__dvHl = {
-    on: (words) => hlOn(words),
-    off: () => hlOff(),
-    isOn: () => HL.on
-  };
-
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.type === "DV_SHOW_CARD") {
-      /* Broadcast reaches every frame. Only the one holding the selection answers, so
-         the reply comes from the right frame instead of whichever replied first; the
-         top frame answers when nothing is selected (keyboard-shortcut fallback). */
-      const sel = window.getSelection();
-      const hasSel = !!(sel && sel.toString().trim());
-      if (!hasSel && !(window === window.top && msg.fallbackText)) return false;
       sendResponse(showCard(msg));
     } else if (msg.type === "DV_HIGHLIGHT") {
       if (msg.action === "toggle") {
@@ -696,10 +513,6 @@
   /* When the persistent highlight mode is on, highlight automatically on load. */
   (async () => {
     try {
-      if (!document.body) return;
-      // A Colibrio page turn spawns several frames, plus consent/analytics frames
-      // with nothing in them. Don't wake the service worker for those.
-      if (window !== window.top && (document.body.textContent || "").trim().length < 40) return;
       const { hlAuto } = await chrome.storage.local.get({ hlAuto: false });
       if (!hlAuto || HL.on) return;
       const r = await chrome.runtime.sendMessage({ type: "DV_GET_HL_WORDS" });

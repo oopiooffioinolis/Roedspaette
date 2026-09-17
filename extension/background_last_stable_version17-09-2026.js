@@ -615,75 +615,19 @@ async function buildHighlightIndex(cfg) {
   return map;
 }
 
-/* A Colibrio page turn spawns half a dozen frames at once and each one asks for
-   the word list. Without this, that's six concurrent buildHighlightIndex runs —
-   six GitHub round trips — on every turn. One in-flight promise serves them all,
-   and the result is parked in session storage (cleared when the browser closes)
-   so later turns don't rebuild at all. */
-let hlInflight = null;
-const HL_WORDS_TTL = 5 * 60 * 1000;
-
-async function getHighlightWords(cfg) {
-  try {
-    const { hlWords } = await chrome.storage.session.get({ hlWords: null });
-    if (hlWords && Date.now() - hlWords.at < HL_WORDS_TTL) return hlWords.map;
-  } catch (_) {}
-  if (hlInflight) return hlInflight;
-  hlInflight = (async () => {
-    const map = await buildHighlightIndex(cfg);
-    try { await chrome.storage.session.set({ hlWords: { at: Date.now(), map } }); } catch (_) {}
-    return map;
-  })();
-  try { return await hlInflight; } finally { hlInflight = null; }
-}
-
-/* Call after anything that changes the saved words, or highlighting shows stale
-   data for up to TTL. */
-async function invalidateHlWords() {
-  hlInflight = null;
-  try { await chrome.storage.session.remove("hlWords"); } catch (_) {}
-}
-
-/* Drives the highlighter in EVERY frame and sums the per-frame counts.
-   executeScript with allFrames returns one result per frame, which tabs.sendMessage
-   cannot do — it delivers to all frames but hands back only the first reply, so the
-   count used to come from whichever frame answered first (usually the chrome-only
-   top document, reporting zero). The injected function runs in the same isolated
-   world as content.js, so it can reach the __dvHl handle the content script exposes. */
-async function driveHighlight(tabId, on, words) {
-  const results = await chrome.scripting.executeScript({
-    target: { tabId, allFrames: true },
-    args: [!!on, words || null],
-    func: (turnOn, wordMap) => {
-      const api = window.__dvHl;
-      if (!api) return 0;
-      return turnOn ? api.on(wordMap) : (api.off(), 0);
-    }
-  });
-  return results.reduce((sum, r) => sum + (typeof r.result === "number" ? r.result : 0), 0);
-}
-
 async function toggleHighlight(tab) {
   if (!tab?.id) return { error: "No tab." };
   const { cfg } = await getState();
   if (!configured(cfg)) return { error: "Not set up yet — open options first." };
   try {
-    await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, files: ["content.js"] });
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js"] });
   } catch (e) {
     return { error: "Can't highlight on this page." };
   }
-  let anyOn = false;
-  try {
-    const states = await chrome.scripting.executeScript({
-      target: { tabId: tab.id, allFrames: true },
-      func: () => !!(window.__dvHl && window.__dvHl.isOn())
-    });
-    anyOn = states.some((r) => r.result);
-  } catch (_) {}
-  if (anyOn) { await driveHighlight(tab.id, false).catch(() => {}); return { on: false }; }
-  const words = await getHighlightWords(cfg);
-  const count = await driveHighlight(tab.id, true, words);
-  return { on: true, count };
+  const probe = await chrome.tabs.sendMessage(tab.id, { type: "DV_HIGHLIGHT", action: "toggle" });
+  if (!probe || !probe.needWords) return probe || { error: "No response from page." };
+  const words = await buildHighlightIndex(cfg);
+  return chrome.tabs.sendMessage(tab.id, { type: "DV_HIGHLIGHT", action: "on", words });
 }
 
 /* Force highlight on or off for one tab (used when flipping the persistent mode). */
@@ -692,14 +636,13 @@ async function applyHighlight(tab, on) {
   const { cfg } = await getState();
   if (on && !configured(cfg)) return { error: "Not set up yet — open options first." };
   try {
-    await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, files: ["content.js"] });
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js"] });
   } catch (e) {
     return { error: "Can't highlight on this page." };
   }
-  if (!on) { await driveHighlight(tab.id, false).catch(() => {}); return { on: false }; }
-  const words = await getHighlightWords(cfg);
-  const count = await driveHighlight(tab.id, true, words);
-  return { on: true, count };
+  if (!on) return chrome.tabs.sendMessage(tab.id, { type: "DV_HIGHLIGHT", action: "off" }).catch(() => ({ on: false }));
+  const words = await buildHighlightIndex(cfg);
+  return chrome.tabs.sendMessage(tab.id, { type: "DV_HIGHLIGHT", action: "on", words });
 }
 
 /* Persistent "highlight known words everywhere" mode. When on, a dynamic content
@@ -713,17 +656,9 @@ async function registerAutoHl() {
     if (!has) return false; // no broad access yet; UI should request it
     const existing = await chrome.scripting.getRegisteredContentScripts({ ids: [AUTO_HL_ID] }).catch(() => []);
     if (!existing.length) {
-      // allFrames: the book text lives in nested frames, not the top document.
-      // matchOriginAsFallback: Colibrio (eReolen/Publizon) serves each page surface
-      // from a blob: URL, which "*://*/*" does NOT match — without this the script
-      // never runs where the text is. Older Chrome/Edge rejects the unknown key, so
-      // fall back to a plain registration rather than losing the script entirely.
-      const base = { id: AUTO_HL_ID, js: ["content.js"], matches: ["*://*/*"], runAt: "document_idle", allFrames: true };
-      try {
-        await chrome.scripting.registerContentScripts([{ ...base, matchOriginAsFallback: true }]);
-      } catch (_) {
-        await chrome.scripting.registerContentScripts([base]);
-      }
+      await chrome.scripting.registerContentScripts([{
+        id: AUTO_HL_ID, js: ["content.js"], matches: ["*://*/*"], runAt: "document_idle", allFrames: false
+      }]);
     }
     return true;
   } catch (_) { return false; }
@@ -835,10 +770,7 @@ async function startCapture(tab, fallbackText) {
   const famBases = VS.groupFamilies(sets.map((n) => ({ name: n }))).map((f) => VS.familyFile(f.base, 1));
   const activeFam = activeSet ? VS.familyFile(VS.setFamily(activeSet).base, 1) : (famBases[0] || "");
   try {
-    await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, files: ["content.js"] });
-    // Broadcast: only the frame that actually holds the selection replies (content.js
-    // stays silent otherwise), so the reply comes from the right frame rather than
-    // from whichever one happened to answer first.
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js"] });
     await chrome.tabs.sendMessage(tab.id, {
       type: "DV_SHOW_CARD",
       activeSet: activeFam,
@@ -986,7 +918,6 @@ async function handleMessage(msg, sender) {
   switch (msg.type) {
     case "DV_SAVE": {
       const res = await saveEntry(msg.entry);
-      if (!res.error && !res.queued) await invalidateHlWords();
       if (res.error || res.queued || res.needsSetup) reportSave(res, msg.entry.term);
       return res;
     }
@@ -1001,7 +932,7 @@ async function handleMessage(msg, sender) {
     }
     case "DV_GET_HL_WORDS": {
       if (!configured(cfg)) return { error: "not-configured" };
-      return { words: await getHighlightWords(cfg) };
+      return { words: await buildHighlightIndex(cfg) };
     }
     case "DV_GET_AUTO_HL": {
       const { hlAuto } = await chrome.storage.local.get({ hlAuto: false });
@@ -1017,9 +948,7 @@ async function handleMessage(msg, sender) {
     }
     case "DV_UPDATE_TRANSLATION": {
       if (!configured(cfg)) return { error: "not-configured" };
-      const r = await updateTranslation(cfg, msg.set, msg.id, msg.translation);
-      if (r && r.ok) await invalidateHlWords();
-      return r;
+      return updateTranslation(cfg, msg.set, msg.id, msg.translation);
     }
     case "DV_GET_STATE": {
       const { setFiles } = await chrome.storage.local.get({ setFiles: [] });
@@ -1074,9 +1003,7 @@ async function handleMessage(msg, sender) {
     case "DV_RESOLVE_CHOICE": {
       if (!configured(cfg)) return { error: "not-configured" };
       if (!msg.set || !msg.id) return { error: "Missing set or id." };
-      const r = await resolveChoice(cfg, msg.set, msg.id, { candidate: msg.candidate, translation: msg.translation });
-      if (r && !r.error) await invalidateHlWords();
-      return r;
+      return resolveChoice(cfg, msg.set, msg.id, { candidate: msg.candidate, translation: msg.translation });
     }
     case "DV_RETRY_QUEUE": {
       if (!configured(cfg)) return { error: "not-configured" };
