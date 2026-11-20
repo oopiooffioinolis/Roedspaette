@@ -395,17 +395,28 @@
   let trBox = null;
   let sayAudio = null;
 
-  /* ordnet.dk's mp3s. The reader page sets no CSP, so a plain Audio element from here
-     reaches the network; if a future page does restrict media-src, the error handler
-     below is what surfaces it instead of failing silently. */
-  function say(url, onState) {
+  /* ordnet.dk's mp3s. The element MUST be built in the same document as the button
+     that was clicked: the popup lives in the top document, so an Audio created in this
+     frame's realm belongs to a document that never received the click, and Chrome
+     refuses to play it for lack of user activation. Hence the win argument. */
+  function say(url, win, onState) {
+    const set = (m) => { if (onState) onState(m); };
     try { if (sayAudio) { sayAudio.pause(); sayAudio = null; } } catch (_) {}
     if (!url) return;
-    const a = new Audio(url);
+    let Ctor = null;
+    try { Ctor = (win && win.Audio) || Audio; } catch (_) { Ctor = Audio; }
+    const a = new Ctor(url);
     sayAudio = a;
-    a.addEventListener("ended", () => onState && onState(""));
-    a.addEventListener("error", () => onState && onState("couldn't play the audio"));
-    a.play().then(() => onState && onState("playing…")).catch(() => onState && onState("couldn't play the audio"));
+    a.addEventListener("ended", () => set(""));
+    // Distinguish the two failures — they need opposite fixes, and collapsing them
+    // into one message cost an evening once already.
+    a.addEventListener("error", () => {
+      const code = a.error && a.error.code;
+      set(code === 2 ? "audio blocked by the network" : "audio file unavailable");
+    });
+    a.play()
+      .then(() => set("playing…"))
+      .catch((e) => set(e && e.name === "NotAllowedError" ? "click ▶ again to play" : "couldn't start playback"));
   }
 
   /* Popups go in the TOP document when we're in a frame: a Colibrio page surface is
@@ -764,7 +775,7 @@
     const sayBtn = shadow.querySelector("#dv-hl-say");
     if (sayBtn) {
       sayBtn.addEventListener("click", () => {
-        say(entry.audio, (m) => { if (trBox) status.textContent = m; });
+        say(entry.audio, ctx.win, (m) => { if (trBox) status.textContent = m; });
       });
     }
 
