@@ -9,6 +9,7 @@ each card's schedule in both quiz directions (from progress/cards.json). Needs o
 import glob, json, os, sys
 
 from openpyxl import Workbook
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.styles import Font
 
 WORD_FIELDS = ["ID", "DateAdded", "Term", "Lemma", "WordClass", "Gender", "Inflections",
@@ -19,6 +20,11 @@ PHRASE_FIELDS = ["ID", "DateAdded", "Phrase", "Gloss", "Translation", "Snippet",
 SRS = [("due", "Due"), ("interval", "Interval"), ("reps", "Reps"), ("lapses", "Lapses"),
        ("stability", "Stability"), ("difficulty", "Difficulty"), ("lastReview", "LastReview")]
 WIDTH = {"Term": 18, "Phrase": 30, "Definition": 40, "Translation": 30, "Snippet": 50, "Gloss": 36}
+
+
+def clean(v):
+    # control characters (e.g. from PDF snippets) are not allowed in xlsx
+    return ILLEGAL_CHARACTERS_RE.sub("", v) if isinstance(v, str) else v
 
 
 def sheet(wb, title, rows, fields, progress):
@@ -36,7 +42,10 @@ def sheet(wb, title, rows, fields, progress):
     for r in rows:
         p = progress.get(r.get("ID", ""), {})
         srs = [p.get(d, {}).get(k, "") for d in ("da2en", "en2da") for k, _ in SRS]
-        ws.append([r.get(f, "") for f in fields + extra] + srs)
+        ws.append([clean(r.get(f, "")) for f in fields + extra] + srs)
+        for c in ws[ws.max_row]:
+            if isinstance(c.value, str) and c.value.startswith("="):
+                c.data_type = "s"  # text like "= kaffemølle" is not a formula
     for i, h in enumerate(header, 1):
         ws.column_dimensions[ws.cell(1, i).column_letter].width = WIDTH.get(h, 14)
     ws.freeze_panes = "A2"
