@@ -1,0 +1,15 @@
+{"id":"2e43eee5-5f9f-4b57-9626-9379f36e85a1","dir":"da2en","ts":"2026-08-05T07:17:22.686Z","grade":"good","elapsed":7,"stability":2.48,"difficulty":9.68,"interval":2}
+{"id":"0b10c54f-474f-48c3-ab2a-200976499aa8","dir":"da2en","ts":"2026-08-05T07:18:03.994Z","grade":"again","elapsed":0,"stability":0.4,"difficulty":7.19,"interval":0}
+{"id":"47f625fa-3dac-4f40-bed4-2654ab45fb25","dir":"da2en","ts":"2026-08-05T07:19:48.091Z","grade":"again","elapsed":7,"stability":0.44,"difficulty":8.87,"interval":0}
+{"id":"9ebfd7cf-6c34-4c95-b479-9ae32e17fd9e","dir":"da2en","ts":"2026-08-05T07:20:16.559Z","grade":"again","elapsed":7,"stability":0.24,"difficulty":9.2,"interval":0}
+{"id":"0b10c54f-474f-48c3-ab2a-200976499aa8","dir":"da2en","ts":"2026-08-05T07:20:24.040Z","grade":"good","elapsed":0,"stability":0.56,"difficulty":7.17,"interval":1}
+{"id":"47f625fa-3dac-4f40-bed4-2654ab45fb25","dir":"da2en","ts":"2026-08-05T07:20:34.497Z","grade":"good","elapsed":0,"stability":0.62,"difficulty":8.84,"interval":1}
+{"id":"9ebfd7cf-6c34-4c95-b479-9ae32e17fd9e","dir":"da2en","ts":"2026-08-05T07:20:44.702Z","grade":"good","elapsed":0,"stability":0.34,"difficulty":9.17,"interval":1}
+{"id":"8339909b-5842-4040-a7e1-85adfde72144","dir":"da2en","ts":"2026-08-05T07:20:50.871Z","grade":"good","elapsed":7,"stability":6.05,"difficulty":9,"interval":6}
+{"id":"30c7c5fa-481c-4a68-b1cd-cd6f099c12d2","dir":"da2en","ts":"2026-08-05T07:20:59.819Z","grade":"good","elapsed":9,"stability":21.15,"difficulty":6.46,"interval":20}
+{"id":"e370b465-1be4-4af6-9ce3-6dbf2118fc91","dir":"da2en","ts":"2026-08-05T07:21:06.497Z","grade":"good","elapsed":7,"stability":1.6,"difficulty":9.28,"interval":2}
+{"id":"05d5014c-1bc9-48f5-ac80-9c6659843c67","dir":"da2en","ts":"2026-08-05T07:21:14.879Z","grade":"again","elapsed":7,"stability":0.17,"difficulty":9.66,"interval":0}
+{"id":"bbfa42d2-2fc9-455f-a531-51bd94ccdeab","dir":"da2en","ts":"2026-08-05T07:21:27.739Z","grade":"good","elapsed":9,"stability":22.33,"difficulty":5.27,"interval":22}
+{"id":"af884b9f-7114-4978-a768-8bd175490e45","dir":"da2en","ts":"2026-08-05T07:21:38.716Z","grade":"good","elapsed":0,"stability":3.17,"difficulty":5.28,"interval":3}
+{"id":"c2d45936-5793-42b4-968a-e066bcb27036","dir":"da2en","ts":"2026-08-20T15:59:06.324Z","grade":"good","elapsed":24,"stability":40.11,"difficulty":6.74,"interval":41}
+{"id":"7d3ca2e1-b34b-415c-90c7-5e9eabfa1296","dir":"da2en","ts":"2026-08-20T15:59:10.257Z","grade":"good","elapsed":22,"stability":3.2,"difficulty":9.45,"interval":3}

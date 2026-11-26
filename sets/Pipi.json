@@ -1,0 +1,12 @@
+{
+  "schema": 4,
+  "app": "Rødspætte",
+  "set": "Pipi",
+  "created": "2026-07-27",
+  "words": [
+    {"ID":"3a9f37ff-49c4-42ab-84b8-0c0439a141ec","DateAdded":"2026-07-27","Term":"forfalden","Lemma":"forfalden","WordClass":"adjektiv","Inflections":"-t, forfaldne","IPA":"[fʌˈfalˀən]","AudioURL":"https://static.ordnet.dk/mp3/11014/11014469_1.mp3","Definition":"i dårlig stand (pga. manglende vedligeholdelse)","Translation":"overdue","SourceTitle":"| Biblioteket Sønderborg","SourceURL":"https://biblioteket.sonderborg.dk/reader?orderid=8e81801b-12c1-47fd-8369-ee111821c1a4","DeepLink":"https://biblioteket.sonderborg.dk/reader?orderid=8e81801b-12c1-47fd-8369-ee111821c1a4#:~:text=forfalden","Status":"ok"},
+    {"ID":"84012969-f875-4303-9258-bbe80b133427","DateAdded":"2026-07-28","Term":"dræber","Lemma":"dræber","WordClass":"substantiv","Gender":"en","Inflections":"-en, -e, -ne","IPA":"[ˈdʁεːbʌ]","AudioURL":"https://static.ordnet.dk/mp3/11009/11009809_1.mp3","Definition":"nogen eller noget der slår ihjel (på en voldsom måde) eller på anden måde forårsager andres død","Translation":"kills","Snippet":"Jeg dræber ingenting!","SourceTitle":"Jeg dræber ingenting! | Videos & Movies on Vimeo","SourceURL":"https://vimeo.com/1206503404?fl=pl&fe=ti","DeepLink":"https://vimeo.com/1206503404?fl=pl&fe=ti#:~:text=dr%C3%A6ber","Status":"ok"},
+    {"ID":"4f0e9221-8202-4e2e-b8fd-fee33eef092a","DateAdded":"2026-07-28","Term":"alvorligt","Lemma":"alvorlig","WordClass":"adjektiv","Inflections":"-t, -e","IPA":"[alˈvɒˀli]","AudioURL":"https://static.ordnet.dk/mp3/11001/11001475_1.mp3","Definition":"bekymrende; kritisk; farlig","Translation":"Seriously","Snippet":"Maria Reumert Gjerding (SF) gav blandt andet en »king of trawlfree zones«-trøje til Magnus Heunicke i gave under ministeroverddragelsen i juni. I dag tager hun kritikken alvorligt og havde gerne set, at man var længere: »Min linje er klar: Der skal tempo på.« Illustration: Keld Navntoft/Ritzau Scanpix.","SourceTitle":"Fiskere trawler løs i kommende forbudszoner, viser ny data: »Havbunden kan ikke klare mere« | Ingeniøren","SourceURL":"https://ing.dk/artikel/fiskere-trawler-loes-i-kommende-forbudszoner-viser-ny-data-havbunden-kan-ikke-klare-mere","DeepLink":"https://ing.dk/artikel/fiskere-trawler-loes-i-kommende-forbudszoner-viser-ny-data-havbunden-kan-ikke-klare-mere#:~:text=alvorligt","Status":"ok"}
+  ],
+  "phrases": []
+}

@@ -1,0 +1,10 @@
+{
+  "schema": 4,
+  "app": "Rødspætte",
+  "set": "Repeats",
+  "created": "2026-07-01",
+  "words": [
+    {"ID":"49a9c655-f892-440d-b53e-3bf3b6965ce6","DateAdded":"2026-07-01","Term":"beskytte","Lemma":"beskytte","WordClass":"verbum","Inflections":"-r, -de, -t","IPA":"[beˈsgødə]","AudioURL":"https://static.ordnet.dk/mp3/11004/11004239_1.mp3","Definition":"forhindre at nogen eller noget lider skade eller overlast; sikre mod at nogen kommer i fare, i nød eller i en anden uønsket situation","Translation":"protect","SourceTitle":"miljoegodkendelse_-_gaeldende_270917_dok_121943-17_v1_0.pdf","Status":"ok"}
+  ],
+  "phrases": []
+}

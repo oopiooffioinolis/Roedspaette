@@ -1,0 +1,11 @@
+{
+  "schema": 4,
+  "app": "Rødspætte",
+  "set": "Ordbog",
+  "created": "2026-07-29",
+  "words": [
+    {"ID":"7a4cc355-7000-4f85-86c8-08ae732fbcf5","DateAdded":"2026-07-29","Term":"ansvar","Lemma":"ansvar","WordClass":"substantiv","Gender":"et","Inflections":"-et","IPA":"[ˈanˌsvɑˀ]","AudioURL":"https://static.ordnet.dk/mp3/11001/11001992_1.mp3","Definition":"juridisk eller moralsk forpligtelse til at stå til regnskab, garantere eller sørge for noget eller nogen","Translation":"responsibility","Snippet":"andelsselskab med begrænset ansvar\ncoorporation with limited liability","SourceTitle":"ansvar | Den Danske Ordbog","SourceURL":"https://ordnet.dk/ddo/ordbog/ansvar","DeepLink":"https://ordnet.dk/ddo/ordbog/ansvar#:~:text=ansvar","Status":"ok"},
+    {"ID":"4107c766-90bd-4707-80a2-e4f7c817dcc9","DateAdded":"2026-07-30","Term":"vandring","Lemma":"vandring","WordClass":"substantiv","Gender":"en","Inflections":"-en, -er, -erne","IPA":"[ˈvɑndʁεŋ]","AudioURL":"https://static.ordnet.dk/mp3/12005/12005739_1.mp3","Definition":"det at vandre en længere strækning (i naturen); det at rejse rundt til fods; vandretur","Translation":"Walking","Snippet":"SPOR skal opleves i naturen. Med høretelefoner i ørerne kan du opleve de stedsspecifikke fortællinger, der forstærkes af et stemningsfuldt lyddesign. De litterære lydvandringer er tilgængelige i naturvejledernes app Naturlandet Sønderborg.","SourceTitle":"SPOR | Biblioteket Sønderborg","SourceURL":"https://biblioteket.sonderborg.dk/spor","DeepLink":"https://biblioteket.sonderborg.dk/spor#:~:text=vandring","Status":"ok"}
+  ],
+  "phrases": []
+}
