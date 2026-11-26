@@ -9,3 +9,13 @@
 {"id":"538e649c-49a6-4872-9b5d-0ae678046b6b","dir":"da2en","ts":"2026-11-23T08:13:26.303Z","grade":"good","elapsed":0,"stability":0.28,"difficulty":8.06,"interval":1}
 {"id":"1add7cda-03e4-4419-b301-638001e6f7b7","dir":"da2en","ts":"2026-11-23T08:13:30.668Z","grade":"hard","elapsed":117,"stability":22.1,"difficulty":8.57,"interval":23}
 {"id":"bc0d7548-13ff-4f5b-88b1-97a503b7e5d9","dir":"da2en","ts":"2026-11-23T08:13:41.835Z","grade":"hard","elapsed":0,"stability":1.18,"difficulty":6.49,"interval":1}
+{"id":"b3a2e66f-8f55-4401-9ea6-5ae0f5446ef6","dir":"da2en","ts":"2026-11-26T21:41:48.181Z","grade":"good","elapsed":122,"stability":56.9,"difficulty":7.15,"interval":56}
+{"id":"2e43eee5-5f9f-4b57-9626-9379f36e85a1","dir":"da2en","ts":"2026-11-26T21:41:51.804Z","grade":"good","elapsed":113,"stability":17.37,"difficulty":9.65,"interval":18}
+{"id":"d7ec747b-d0f3-4ce4-b45a-5e56316d9389","dir":"da2en","ts":"2026-11-26T21:41:57.091Z","grade":"hard","elapsed":0,"stability":1.18,"difficulty":6.49,"interval":1}
+{"id":"5bdf8940-ff67-43c9-b6c0-46932ded6da8","dir":"da2en","ts":"2026-11-26T21:42:01.085Z","grade":"again","elapsed":120,"stability":0.34,"difficulty":8.38,"interval":0}
+{"id":"47f625fa-3dac-4f40-bed4-2654ab45fb25","dir":"da2en","ts":"2026-11-26T21:42:06.809Z","grade":"good","elapsed":113,"stability":9.88,"difficulty":8.81,"interval":11}
+{"id":"8339909b-5842-4040-a7e1-85adfde72144","dir":"da2en","ts":"2026-11-26T21:42:13.084Z","grade":"again","elapsed":113,"stability":4.32,"difficulty":9.3,"interval":0}
+{"id":"5bdf8940-ff67-43c9-b6c0-46932ded6da8","dir":"da2en","ts":"2026-11-26T21:42:15.474Z","grade":"good","elapsed":0,"stability":0.48,"difficulty":8.36,"interval":1}
+{"id":"1f81772b-8ed6-4aea-ba5b-a6a561c686db","dir":"da2en","ts":"2026-11-26T21:42:21.192Z","grade":"again","elapsed":0,"stability":0.4,"difficulty":7.19,"interval":0}
+{"id":"8339909b-5842-4040-a7e1-85adfde72144","dir":"da2en","ts":"2026-11-26T21:42:23.547Z","grade":"good","elapsed":0,"stability":6.08,"difficulty":9.27,"interval":6}
+{"id":"30c7c5fa-481c-4a68-b1cd-cd6f099c12d2","dir":"da2en","ts":"2026-11-26T21:42:28.009Z","grade":"again","elapsed":113,"stability":4.97,"difficulty":7.59,"interval":0}
