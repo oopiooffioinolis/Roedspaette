@@ -165,3 +165,5 @@
 {"id":"4300889c-9e60-4788-a946-734e07a27d20","dir":"da2en","ts":"2026-11-27T22:15:44.330Z","grade":"again","elapsed":84,"stability":0.22,"difficulty":9.41,"interval":0}
 {"id":"a0876471-cbaf-41fc-a1d7-5d58d6045929","dir":"da2en","ts":"2026-11-27T22:16:02.234Z","grade":"hard","elapsed":121,"stability":10.37,"difficulty":8.57,"interval":9}
 {"id":"dfc01d90-cc59-48c7-9c2d-36452c1a9b6b","dir":"da2en","ts":"2026-11-27T22:16:07.888Z","grade":"good","elapsed":123,"stability":36.72,"difficulty":8.75,"interval":39}
+{"id":"8f9fbbd4-941d-450a-8071-9023be4c10f9","dir":"da2en","ts":"2026-11-27T22:16:18.895Z","grade":"again","elapsed":84,"stability":0.34,"difficulty":8.38,"interval":0}
+{"id":"593a401b-3690-44ea-9c72-53e65559028a","dir":"da2en","ts":"2026-11-27T22:16:21.430Z","grade":"intro"}
