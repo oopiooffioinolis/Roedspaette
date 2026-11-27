@@ -60,7 +60,7 @@
     "87f910eb-6aa4-4751-ad3a-14ec49047ac6": {"da2en":{"due":"2026-12-03","interval":6,"ease":2.5,"reps":1,"lapses":1,"stability":6.9,"difficulty":8.14,"lastReview":"2026-11-27"}},
     "8e0306d1-6036-4774-8e44-a607339a1174": {"da2en":{"due":"2026-11-28","interval":1,"ease":2.5,"reps":1,"lapses":4,"stability":0.01,"difficulty":9.8,"lastReview":"2026-11-27"},"en2da":{"due":"2026-11-27","ease":2.5,"lapses":1,"stability":0.34,"difficulty":8.38,"lastReview":"2026-11-27"}},
     "8ebac409-093d-442a-9b03-6866d8b59a8a": {"da2en":{"due":"2026-11-27","ease":2.5,"lapses":3,"stability":0.77,"difficulty":9.55,"lastReview":"2026-11-27"},"en2da":{"due":"2026-12-14","interval":17,"ease":2.5,"reps":2,"stability":18.31,"difficulty":6.03,"lastReview":"2026-11-27"}},
-    "8f9fbbd4-941d-450a-8071-9023be4c10f9": {"da2en":{"due":"2026-09-05","interval":1,"ease":2.5,"reps":1,"stability":0.34,"difficulty":7.63,"lastReview":"2026-09-04"}},
+    "8f9fbbd4-941d-450a-8071-9023be4c10f9": {"da2en":{"due":"2026-11-27","ease":2.5,"lapses":1,"stability":0.34,"difficulty":8.38,"lastReview":"2026-11-27"}},
     "9070405e-e383-4281-b96a-3a6ddcf9b0be": {"da2en":{"due":"2026-07-31","interval":2,"ease":2.5,"reps":4,"lapses":2,"stability":2.19,"difficulty":9.59,"lastReview":"2026-07-29"}},
     "90c3a8eb-547b-4951-aa1e-5820356f67e3": {"da2en":{"due":"2026-11-29","interval":6,"ease":2.5,"reps":2,"lapses":1,"stability":5.65,"difficulty":9.27,"lastReview":"2026-11-23"}},
     "90feebf4-3c4b-4435-abcb-01e22f2b8840": {"state":"learn","da2en":{"due":"2026-11-27","interval":1,"ease":2.5,"reps":1,"stability":1.18,"difficulty":6.49,"lastReview":"2026-11-26"}},
