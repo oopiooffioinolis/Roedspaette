@@ -75,7 +75,7 @@
     "bbac8f9e-1096-4831-9880-3d009258cf96": {"da2en":{"due":"2026-11-26","ease":2.5,"lapses":1,"stability":1.24,"difficulty":8.36,"lastReview":"2026-11-26"}},
     "bbfa42d2-2fc9-455f-a531-51bd94ccdeab": {"da2en":{"due":"2026-11-26","ease":2.5,"lapses":1,"stability":5.05,"difficulty":6.79,"lastReview":"2026-11-26"}},
     "bc0d7548-13ff-4f5b-88b1-97a503b7e5d9": {"da2en":{"due":"2026-11-27","interval":1,"ease":2.5,"reps":1,"lapses":1,"stability":0.28,"difficulty":8.6,"lastReview":"2026-11-26"}},
-    "c0658107-c794-4497-9104-f20500201e74": {"da2en":{"due":"2026-07-31","interval":2,"ease":2.5,"reps":5,"lapses":1,"stability":1.55,"difficulty":9.55,"lastReview":"2026-07-29"}},
+    "c0658107-c794-4497-9104-f20500201e74": {"da2en":{"due":"2026-11-27","ease":2.5,"lapses":2,"stability":1.55,"difficulty":9.67,"lastReview":"2026-11-27"}},
     "c2d45936-5793-42b4-968a-e066bcb27036": {"da2en":{"due":"2026-09-30","interval":41,"ease":2.5,"reps":3,"lapses":1,"stability":40.11,"difficulty":6.74,"lastReview":"2026-08-20"}},
     "c4242a49-4304-41f0-9ad3-715d9747176e": {"da2en":{"due":"2026-11-28","interval":1,"ease":2.5,"reps":1,"lapses":1,"stability":0.99,"difficulty":7.98,"lastReview":"2026-11-27"}},
     "c496c4cd-c964-44fe-a26b-dca1e7362042": {"da2en":{"due":"2026-12-07","interval":10,"ease":2.5,"reps":3,"stability":10.04,"difficulty":7.5,"lastReview":"2026-11-27"}},
