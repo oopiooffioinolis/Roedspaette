@@ -154,3 +154,4 @@
 {"id":"5f1b5f6c-2699-4d4d-a318-52ac6a50864e","dir":"da2en","ts":"2026-11-27T22:13:34.582Z","grade":"intro"}
 {"id":"05d5014c-1bc9-48f5-ac80-9c6659843c67","dir":"da2en","ts":"2026-11-27T22:13:43.650Z","grade":"good","elapsed":114,"stability":2.27,"difficulty":9.63,"interval":2}
 {"id":"9ebfd7cf-6c34-4c95-b479-9ae32e17fd9e","dir":"da2en","ts":"2026-11-27T22:13:52.899Z","grade":"again","elapsed":114,"stability":0.34,"difficulty":9.41,"interval":0}
+{"id":"c0658107-c794-4497-9104-f20500201e74","dir":"da2en","ts":"2026-11-27T22:14:05.394Z","grade":"again","elapsed":121,"stability":1.55,"difficulty":9.67,"interval":0}
